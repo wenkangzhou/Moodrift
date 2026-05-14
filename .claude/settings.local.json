@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(yarn -v)",
+      "Bash(yarn create *)",
+      "Bash(shopt -s dotglob)",
+      "Bash(mv /tmp/moodrift-init/* /tmp/moodrift-init/.* .)",
+      "Bash(cp -a /tmp/moodrift-init/. .)",
+      "Bash(rm -rf /tmp/moodrift-init)",
+      "Bash(npx shadcn@latest init --yes --defaults)",
+      "Bash(yarn add *)",
+      "Bash(npx shadcn@latest add -y card slider select sheet tabs label badge)",
+      "Bash(yarn dev *)",
+      "Bash(yarn build *)",
+      "Bash(yarn install *)",
+      "Bash(curl -s http://localhost:3000/zh)",
+      "Bash(npx playwright *)",
+      "Bash(curl *)",
+      "Bash(node *)",
+      "Bash(git remote *)",
+      "Bash(git add *)",
+      "Bash(killall -9 node)",
+      "Bash(lsof -t -i:4548)",
+      "Bash(xargs kill -9)",
+      "Bash(lsof -i:4548)"
+    ]
+  }
+}

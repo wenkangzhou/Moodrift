@@ -1,0 +1,44 @@
+{
+  "appName": "Moodrift",
+  "appTagline": "不是播放器，而是进入某种状态",
+  "loading": "加载中...",
+  "switchLang": "EN",
+  "theme": {
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "controls": {
+    "energy": "能量",
+    "environment": "环境",
+    "activity": "活动",
+    "emotion": "情绪",
+    "calm": "平静",
+    "intense": "强烈"
+  },
+  "environments": {
+    "rain": "雨天",
+    "city": "城市",
+    "mountain": "山野",
+    "night": "深夜",
+    "sunset": "日落"
+  },
+  "activities": {
+    "run": "奔跑",
+    "walk": "漫步",
+    "focus": "专注",
+    "work": "工作",
+    "drive": "驾驶"
+  },
+  "emotions": {
+    "lonely": "孤独",
+    "dreamy": "梦幻",
+    "happy": "愉悦",
+    "melancholy": "忧郁"
+  },
+  "output": {
+    "atmosphere": "氛围",
+    "bpm": "BPM",
+    "recommended": "推荐音乐"
+  }
+}

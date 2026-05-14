@@ -1,0 +1,44 @@
+{
+  "appName": "Moodrift",
+  "appTagline": "Not a music player. A space for your current mood.",
+  "loading": "Loading...",
+  "switchLang": "中",
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "controls": {
+    "energy": "Energy",
+    "environment": "Environment",
+    "activity": "Activity",
+    "emotion": "Emotion",
+    "calm": "Calm",
+    "intense": "Intense"
+  },
+  "environments": {
+    "rain": "Rain",
+    "city": "City",
+    "mountain": "Mountain",
+    "night": "Night",
+    "sunset": "Sunset"
+  },
+  "activities": {
+    "run": "Run",
+    "walk": "Walk",
+    "focus": "Focus",
+    "work": "Work",
+    "drive": "Drive"
+  },
+  "emotions": {
+    "lonely": "Lonely",
+    "dreamy": "Dreamy",
+    "happy": "Happy",
+    "melancholy": "Melancholy"
+  },
+  "output": {
+    "atmosphere": "Atmosphere",
+    "bpm": "BPM",
+    "recommended": "Recommended"
+  }
+}

@@ -1,0 +1,156 @@
+'use client';
+
+import { useRef, useState, useEffect, Suspense } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { useAppStore } from '@/stores/useAppStore';
+import { generateMood } from '@/lib/moods';
+import * as THREE from 'three';
+
+function OrbMesh({ color, secondary, energy }: { color: string; secondary: string; energy: number }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const lightRef = useRef<THREE.PointLight>(null);
+
+  const pulseSpeed = 0.5 + (energy / 100) * 2;
+  const floatSpeed = 0.3 + (energy / 100) * 1;
+
+  useFrame(({ clock }) => {
+    if (!meshRef.current) return;
+    const t = clock.getElapsedTime();
+    const breathe = 1 + Math.sin(t * pulseSpeed) * 0.04;
+    meshRef.current.scale.setScalar(breathe);
+    meshRef.current.position.y = Math.sin(t * floatSpeed) * 0.15;
+
+    if (lightRef.current) {
+      lightRef.current.intensity = 2 + Math.sin(t * pulseSpeed * 1.5) * 0.8;
+    }
+  });
+
+  return (
+    <group>
+      <pointLight ref={lightRef} position={[0, 0, 0]} color={color} intensity={2} distance={8} />
+      <mesh ref={meshRef}>
+        <sphereGeometry args={[1.2, 64, 64]} />
+        <meshPhysicalMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.4}
+          roughness={0.35}
+          metalness={0.1}
+          clearcoat={1}
+          clearcoatRoughness={0.1}
+          transparent
+          opacity={0.92}
+        />
+      </mesh>
+      {/* Outer glow sphere */}
+      <mesh>
+        <sphereGeometry args={[1.45, 32, 32]} />
+        <meshBasicMaterial
+          color={secondary}
+          transparent
+          opacity={0.06}
+          side={THREE.BackSide}
+        />
+      </mesh>
+      {/* Inner core */}
+      <mesh>
+        <sphereGeometry args={[0.6, 32, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.15} />
+      </mesh>
+    </group>
+  );
+}
+
+function Scene() {
+  const { energy, environment, activity, emotion } = useAppStore();
+  const [locale, setLocale] = useState('zh');
+
+  useEffect(() => {
+    const unsub = useAppStore.subscribe((s) => {
+      setLocale(s.locale);
+    });
+    return unsub;
+  }, []);
+
+  const mood = generateMood(energy, environment, activity, emotion, locale);
+
+  return (
+    <>
+      <ambientLight intensity={0.2} />
+      <directionalLight position={[5, 5, 5]} intensity={0.5} color="#CBD5E1" />
+      <OrbMesh color={mood.orbColor} secondary={mood.orbSecondary} energy={energy} />
+    </>
+  );
+}
+
+function FallbackOrb() {
+  const { energy, environment, activity, emotion } = useAppStore();
+  const [locale, setLocale] = useState('zh');
+
+  useEffect(() => {
+    const unsub = useAppStore.subscribe((s) => {
+      setLocale(s.locale);
+    });
+    return unsub;
+  }, []);
+
+  const mood = generateMood(energy, environment, activity, emotion, locale);
+
+  return (
+    <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center animate-float">
+      <div
+        className="absolute inset-0 rounded-full blur-3xl animate-pulse-glow"
+        style={{ background: `radial-gradient(circle, ${mood.orbColor}30 0%, transparent 70%)` }}
+      />
+      <div
+        className="relative w-48 h-48 md:w-60 md:h-60 rounded-full"
+        style={{
+          background: `radial-gradient(circle at 35% 35%, ${mood.orbColor} 0%, ${mood.orbSecondary}60 50%, ${mood.orbColor}20 100%)`,
+          boxShadow: `0 0 60px ${mood.orbColor}40, inset 0 0 40px ${mood.orbSecondary}20`,
+        }}
+      />
+    </div>
+  );
+}
+
+export function MoodOrb() {
+  const [mounted, setMounted] = useState(false);
+  const [webglFailed, setWebglFailed] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (!gl) setWebglFailed(true);
+    } catch {
+      setWebglFailed(true);
+    }
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="w-full h-[45vh] md:h-[50vh] flex items-center justify-center">
+        <div className="w-48 h-48 md:w-60 md:h-60 rounded-full bg-muted/20 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (webglFailed) {
+    return <FallbackOrb />;
+  }
+
+  return (
+    <div className="w-full h-[45vh] md:h-[50vh] relative">
+      <Canvas
+        camera={{ position: [0, 0, 4], fov: 45 }}
+        gl={{ antialias: true, alpha: true }}
+        onError={() => setWebglFailed(true)}
+      >
+        <Suspense fallback={null}>
+          <Scene />
+        </Suspense>
+      </Canvas>
+    </div>
+  );
+}
