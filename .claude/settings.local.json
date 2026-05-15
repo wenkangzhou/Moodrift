@@ -30,7 +30,8 @@
       "Bash(lsof -ti:4548)",
       "Bash(python3 -m json.tool)",
       "Bash(git reset *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(GIT_SSH_COMMAND=\"ssh -v\" git push)"
     ]
   }
 }

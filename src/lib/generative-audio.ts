@@ -120,9 +120,11 @@ export class GenerativePlayer {
     const ctx = this.ctx;
     const masterGain = this.masterGain;
     const nodes = this.nodes;
+    const onEnded = this.onEnded;
 
     if (!ctx || !masterGain) {
       this.isPlaying = false;
+      this.onEnded = undefined;
       return;
     }
 
@@ -130,6 +132,7 @@ export class GenerativePlayer {
     this.isPlaying = false;
     this.masterGain = null;
     this.nodes = [];
+    this.onEnded = undefined;
 
     const now = ctx.currentTime;
     masterGain.gain.cancelScheduledValues(now);
@@ -148,7 +151,7 @@ export class GenerativePlayer {
         try { lfo.stop(); } catch {}
       });
       masterGain.disconnect();
-      this.onEnded?.();
+      onEnded?.();
     }, 1600);
   }
 
