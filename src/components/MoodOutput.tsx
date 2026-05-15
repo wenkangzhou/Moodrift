@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, Loader2 } from 'lucide-react';
@@ -36,10 +36,17 @@ export function MoodOutput() {
 
   const hasAiData = !!atmosphere;
 
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveTag(null);
+  }, [energy, environment, activity, emotion]);
+
   const searchQuery = useMemo(() => {
+    if (activeTag) return activeTag;
     const keywords = [environment, activity, emotion, ...tags.slice(0, 2)];
     return keywords.filter(Boolean).join(' ');
-  }, [environment, activity, emotion, tags]);
+  }, [environment, activity, emotion, tags, activeTag]);
 
   const {
     tracks: musicTracks,
@@ -113,8 +120,13 @@ export function MoodOutput() {
           {tags.map((tag) => (
             <Badge
               key={tag}
-              variant="outline"
-              className="px-3 py-1 text-xs tracking-wide border-border/50 text-muted-foreground"
+              variant={activeTag === tag ? 'secondary' : 'outline'}
+              className={`px-3 py-1 text-xs tracking-wide cursor-pointer transition-colors ${
+                activeTag === tag
+                  ? 'border-primary/50 text-primary'
+                  : 'border-border/50 text-muted-foreground hover:border-primary/40 hover:text-foreground'
+              }`}
+              onClick={() => setActiveTag((prev) => (prev === tag ? null : tag))}
             >
               {tag}
             </Badge>
