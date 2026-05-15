@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import Image from 'next/image';
 import { MoodBackground } from '@/components/MoodBackground';
+import { BackgroundFlow } from '@/components/BackgroundFlow';
 import { MoodOrb } from '@/components/MoodOrb';
 import { MoodControls } from '@/components/MoodControls';
 import { MoodOutput } from '@/components/MoodOutput';
@@ -15,6 +16,7 @@ export default function HomePage() {
   return (
     <main className="relative min-h-screen overflow-x-hidden">
       <MoodBackground />
+      <BackgroundFlow />
 
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center pt-12 md:pt-16">

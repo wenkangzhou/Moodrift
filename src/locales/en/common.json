@@ -39,6 +39,7 @@
   "output": {
     "atmosphere": "Atmosphere",
     "bpm": "BPM",
-    "recommended": "Recommended"
+    "recommended": "Recommended",
+    "ready": "Ready to generate"
   }
 }

@@ -1,27 +1,28 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, Play, Pause } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useAudioStore } from '@/stores/useAudioStore';
+import { useNeteasePlaylist } from '@/hooks/useNeteasePlaylist';
 import { useAtmosphere } from '@/hooks/useAtmosphere';
 import { generateMockMood } from '@/lib/moods';
 import { Badge } from '@/components/ui/badge';
-import { AudioPlayer } from '@/components/AudioPlayer';
 import Image from 'next/image';
 
 export function MoodOutput() {
   const { energy, environment, activity, emotion } = useAppStore();
   const { t, i18n } = useTranslation('common');
   const locale = i18n.language;
+  const autoPlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     data: atmosphere,
     loading: atmosphereLoading,
     error: atmosphereError,
-    refetch,
+    refetch: refetchAtmosphere,
   } = useAtmosphere(energy, environment, activity, emotion, locale);
 
   const mockMood = useMemo(
@@ -29,19 +30,72 @@ export function MoodOutput() {
     [energy, environment, activity, emotion, locale]
   );
 
+  const {
+    track: neteaseTrack,
+    loading: neteaseLoading,
+    refetch: refetchNetease,
+  } = useNeteasePlaylist(environment);
+
+  const { currentTrack, isPlaying, progress, playNetease, playGenerative, pause } =
+    useAudioStore();
+
   const title = atmosphere?.title ?? mockMood.title;
   const description = atmosphere?.description ?? mockMood.description;
   const tags = atmosphere?.tags ?? mockMood.tags;
   const bpm = atmosphere?.bpm ?? mockMood.bpm;
-
   const hasAiData = !!atmosphere;
-  const tracks = mockMood.tracks;
 
+  // Auto-play when environment changes (with debounce)
+  const triggerAutoPlay = useCallback(() => {
+    if (autoPlayTimer.current) {
+      clearTimeout(autoPlayTimer.current);
+    }
+    autoPlayTimer.current = setTimeout(() => {
+      refetchNetease();
+    }, 600);
+  }, [refetchNetease]);
+
+  useEffect(() => {
+    triggerAutoPlay();
+    return () => {
+      if (autoPlayTimer.current) {
+        clearTimeout(autoPlayTimer.current);
+      }
+    };
+  }, [environment, triggerAutoPlay]);
+
+  // Play netease track when it loads
+  useEffect(() => {
+    if (neteaseTrack && !neteaseLoading) {
+      playNetease(neteaseTrack);
+    }
+  }, [neteaseTrack, neteaseLoading, playNetease]);
+
+  // Stop audio when component unmounts or mood params change
   useEffect(() => {
     return () => {
       useAudioStore.getState().pause();
     };
   }, [energy, environment, activity, emotion]);
+
+  const handleTogglePlay = () => {
+    if (isPlaying) {
+      pause();
+    } else {
+      // Retry netease first, fallback to generative
+      if (neteaseTrack) {
+        playNetease(neteaseTrack);
+      } else {
+        const track = mockMood.tracks[0];
+        if (track) playGenerative(track);
+      }
+    }
+  };
+
+  const coverUrl =
+    currentTrack?.source === 'netease'
+      ? currentTrack.cover
+      : mockMood.tracks[0]?.cover;
 
   return (
     <AnimatePresence mode="wait">
@@ -56,7 +110,7 @@ export function MoodOutput() {
         {/* AI Generate Button */}
         <div className="flex justify-center mb-6">
           <button
-            onClick={refetch}
+            onClick={refetchAtmosphere}
             disabled={atmosphereLoading}
             className="group flex items-center gap-2 px-4 py-2 rounded-full border border-border/50 bg-background/60 backdrop-blur-sm text-xs tracking-wider uppercase text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -106,47 +160,62 @@ export function MoodOutput() {
           ))}
         </div>
 
-        {/* Tracks */}
-        <div>
-          <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground mb-4 text-center">
-            {t('output.recommended')}
-          </p>
-          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory justify-start md:justify-center">
-            {tracks.map((track, i) => (
-              <motion.div
-                key={`${track.name}-${i}`}
-                className="flex-shrink-0 w-36 snap-center cursor-pointer group"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.1, duration: 0.5 }}
-                whileHover={{ y: -4 }}
-              >
-                <div className="relative aspect-square rounded-xl overflow-hidden mb-3 bg-muted/30">
-                  {track.cover ? (
-                    <Image
-                      src={track.cover}
-                      alt={track.name}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      sizes="144px"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-muted/50" />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <AudioPlayer track={track} />
-                </div>
-                <p className="text-sm font-medium text-foreground truncate">
-                  {track.name}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {track.artist}
-                </p>
-                <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">
-                  {track.genre}
-                </p>
-              </motion.div>
-            ))}
+        {/* Now Playing */}
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative w-48 h-48 rounded-2xl overflow-hidden bg-muted/30 shadow-2xl shadow-primary/10">
+            {coverUrl ? (
+              <Image
+                src={coverUrl}
+                alt={currentTrack?.name ?? 'cover'}
+                fill
+                className="object-cover"
+                sizes="192px"
+              />
+            ) : (
+              <div className="w-full h-full bg-muted/50" />
+            )}
+            {/* Progress overlay */}
+            {isPlaying && (
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted/40">
+                <motion.div
+                  className="h-full bg-primary"
+                  style={{ width: `${progress}%` }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+            )}
+            {/* Play/Pause overlay button */}
+            <button
+              onClick={handleTogglePlay}
+              disabled={neteaseLoading}
+              className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors disabled:opacity-50"
+            >
+              <div className="w-14 h-14 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                {neteaseLoading ? (
+                  <Loader2 className="w-6 h-6 animate-spin text-foreground" />
+                ) : isPlaying ? (
+                  <Pause className="w-6 h-6 text-foreground" />
+                ) : (
+                  <Play className="w-6 h-6 text-foreground ml-1" />
+                )}
+              </div>
+            </button>
+          </div>
+
+          {/* Track info */}
+          <div className="text-center">
+            <p className="text-base font-medium text-foreground">
+              {currentTrack?.name ?? t('output.ready')}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {currentTrack?.artist ?? ''}
+            </p>
+            {currentTrack?.source === 'netease' && (
+              <p className="text-[10px] text-muted-foreground/40 mt-1">NetEase Cloud Music</p>
+            )}
+            {currentTrack?.source === 'generative' && (
+              <p className="text-[10px] text-muted-foreground/40 mt-1">Generative Audio</p>
+            )}
           </div>
         </div>
       </motion.div>
