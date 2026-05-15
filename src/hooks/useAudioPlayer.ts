@@ -5,36 +5,48 @@ export function useAudioPlayer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   const play = useCallback((url: string) => {
     if (!audioRef.current) {
-      audioRef.current = new Audio();
-      audioRef.current.addEventListener('ended', () => {
+      const audio = new Audio();
+
+      audio.addEventListener('ended', () => {
         setIsPlaying(false);
         setProgress(0);
       });
-      audioRef.current.addEventListener('timeupdate', () => {
-        if (audioRef.current) {
-          const p = audioRef.current.duration
-            ? (audioRef.current.currentTime / audioRef.current.duration) * 100
-            : 0;
-          setProgress(p);
+
+      audio.addEventListener('timeupdate', () => {
+        if (audio.duration) {
+          setProgress((audio.currentTime / audio.duration) * 100);
         }
       });
+
+      audio.addEventListener('loadstart', () => setIsLoading(true));
+      audio.addEventListener('canplay', () => setIsLoading(false));
+      audio.addEventListener('error', () => {
+        setIsLoading(false);
+        setIsPlaying(false);
+      });
+
+      audioRef.current = audio;
     }
 
+    const audio = audioRef.current;
+
     if (currentTrack === url && isPlaying) {
-      audioRef.current.pause();
+      audio.pause();
       setIsPlaying(false);
       return;
     }
 
     if (currentTrack !== url) {
-      audioRef.current.src = url;
+      audio.src = url;
       setCurrentTrack(url);
     }
 
-    audioRef.current.play().catch(() => {
+    audio.play().catch(() => {
+      setIsLoading(false);
       setIsPlaying(false);
     });
     setIsPlaying(true);
@@ -51,10 +63,11 @@ export function useAudioPlayer() {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.src = '';
         audioRef.current = null;
       }
     };
   }, []);
 
-  return { isPlaying, currentTrack, progress, play, pause };
+  return { isPlaying, currentTrack, progress, isLoading, play, pause };
 }

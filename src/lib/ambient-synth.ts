@@ -178,4 +178,10 @@ export class AmbientSynth {
       this.play(energy, environment, emotion);
     }
   }
+
+  resumeIfSuspended() {
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
 }

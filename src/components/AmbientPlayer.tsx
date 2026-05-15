@@ -28,6 +28,17 @@ export function AmbientPlayer() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [energy, environment, emotion]);
 
+  // Resume AudioContext when switching back to this tab
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        synthRef.current?.resumeIfSuspended();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {

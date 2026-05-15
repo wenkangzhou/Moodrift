@@ -1,6 +1,6 @@
 'use client';
 
-import { Play, Pause } from 'lucide-react';
+import { Play, Pause, Loader2 } from 'lucide-react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 
 interface AudioPlayerProps {
@@ -9,7 +9,7 @@ interface AudioPlayerProps {
 }
 
 export function AudioPlayer({ previewUrl, trackId }: AudioPlayerProps) {
-  const { isPlaying, currentTrack, progress, play, pause } = useAudioPlayer();
+  const { isPlaying, currentTrack, progress, isLoading, play, pause } = useAudioPlayer();
 
   if (!previewUrl) return null;
 
@@ -30,9 +30,12 @@ export function AudioPlayer({ previewUrl, trackId }: AudioPlayerProps) {
           e.stopPropagation();
           toggle();
         }}
-        className="flex items-center justify-center w-8 h-8 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 text-foreground hover:bg-background transition-colors"
+        disabled={isLoading}
+        className="flex items-center justify-center w-8 h-8 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 text-foreground hover:bg-background transition-colors disabled:opacity-50"
       >
-        {isThisPlaying ? (
+        {isLoading ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : isThisPlaying ? (
           <Pause className="w-3.5 h-3.5" />
         ) : (
           <Play className="w-3.5 h-3.5 ml-0.5" />
