@@ -12,6 +12,11 @@ const environmentGradients: Record<string, string> = {
   sunset: 'radial-gradient(ellipse at 50% 60%, rgba(76,29,61,0.35) 0%, transparent 55%), radial-gradient(ellipse at 30% 20%, rgba(45,27,78,0.25) 0%, transparent 50%)',
 };
 
+function seededRandom(seed: number) {
+  const x = Math.sin(seed * 9301 + 49297) % 1;
+  return x < 0 ? x + 1 : x;
+}
+
 export function MoodBackground() {
   const environment = useAppStore((s) => s.environment);
 
@@ -21,10 +26,8 @@ export function MoodBackground() {
 
   return (
     <div className="fixed inset-0 z-0 overflow-hidden">
-      {/* Base dark layer */}
       <div className="absolute inset-0 bg-[#0B1020]" />
 
-      {/* Animated gradient mesh */}
       <motion.div
         className="absolute inset-0 animate-drift"
         style={{
@@ -35,7 +38,6 @@ export function MoodBackground() {
         transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
       />
 
-      {/* Environment overlay */}
       <motion.div
         className="absolute inset-0"
         style={overlayStyle}
@@ -46,7 +48,6 @@ export function MoodBackground() {
         transition={{ duration: 2.5, ease: 'easeInOut' }}
       />
 
-      {/* Soft center glow */}
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vmin] h-[80vmin] rounded-full pointer-events-none"
         style={{
@@ -54,7 +55,6 @@ export function MoodBackground() {
         }}
       />
 
-      {/* Particles */}
       <Particles environment={environment} />
     </div>
   );
@@ -64,41 +64,46 @@ function Particles({ environment }: { environment: string }) {
   const particleCount = environment === 'rain' ? 40 : environment === 'run' ? 60 : 25;
   const speed = environment === 'run' ? 2.5 : environment === 'rain' ? 1.8 : 1;
 
+  const particles = useMemo(() => {
+    return Array.from({ length: particleCount }).map((_, i) => {
+      const seed = environment.charCodeAt(0) + i * 7919;
+      return {
+        left: seededRandom(seed) * 100,
+        delay: seededRandom(seed + 1) * 8,
+        duration: (4 + seededRandom(seed + 2) * 6) / speed,
+        size: environment === 'rain' ? 1.5 : 2 + seededRandom(seed + 3) * 2,
+        opacity: 0.1 + seededRandom(seed + 4) * 0.3,
+      };
+    });
+  }, [environment, particleCount, speed]);
+
   return (
     <div className="absolute inset-0 pointer-events-none">
-      {Array.from({ length: particleCount }).map((_, i) => {
-        const left = Math.random() * 100;
-        const delay = Math.random() * 8;
-        const duration = (4 + Math.random() * 6) / speed;
-        const size = environment === 'rain' ? 1.5 : 2 + Math.random() * 2;
-        const opacity = 0.1 + Math.random() * 0.3;
-
-        return (
-          <motion.div
-            key={`${environment}-${i}`}
-            className="absolute rounded-full"
-            style={{
-              left: `${left}%`,
-              width: size,
-              height: size,
-              background: environment === 'rain'
-                ? 'rgba(125,211,252,0.4)'
-                : 'rgba(203,213,225,0.3)',
-            }}
-            initial={{ top: '-5%', opacity: 0 }}
-            animate={{
-              top: '105%',
-              opacity: [0, opacity, opacity, 0],
-            }}
-            transition={{
-              duration,
-              delay,
-              repeat: Infinity,
-              ease: 'linear',
-            }}
-          />
-        );
-      })}
+      {particles.map((p, i) => (
+        <motion.div
+          key={`${environment}-${i}`}
+          className="absolute rounded-full"
+          style={{
+            left: `${p.left}%`,
+            width: p.size,
+            height: p.size,
+            background: environment === 'rain'
+              ? 'rgba(125,211,252,0.4)'
+              : 'rgba(203,213,225,0.3)',
+          }}
+          initial={{ top: '-5%', opacity: 0 }}
+          animate={{
+            top: '105%',
+            opacity: [0, p.opacity, p.opacity, 0],
+          }}
+          transition={{
+            duration: p.duration,
+            delay: p.delay,
+            repeat: Infinity,
+            ease: 'linear',
+          }}
+        />
+      ))}
     </div>
   );
 }
