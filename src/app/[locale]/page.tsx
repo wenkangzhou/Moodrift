@@ -7,6 +7,7 @@ import { MoodBackground } from '@/components/MoodBackground';
 import { MoodOrb } from '@/components/MoodOrb';
 import { MoodControls } from '@/components/MoodControls';
 import { MoodOutput } from '@/components/MoodOutput';
+import { AmbientPlayer } from '@/components/AmbientPlayer';
 
 export default function HomePage() {
   const { t } = useTranslation('common');
@@ -53,6 +54,9 @@ export default function HomePage() {
         <div className="mt-6 w-full">
           <MoodControls />
         </div>
+
+        {/* Ambient Player */}
+        <AmbientPlayer />
 
         {/* Output */}
         <div className="mt-2 w-full">
