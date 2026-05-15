@@ -1,10 +1,55 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 export interface AtmosphereData {
   title: string;
   description: string;
   tags: string[];
   bpm: number;
+}
+
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function cacheKey(energy: number, environment: string, activity: string, emotion: string, locale: string) {
+  return `moodrift-atmosphere-${energy}-${environment}-${activity}-${emotion}-${locale}`;
+}
+
+function getCached(
+  energy: number,
+  environment: string,
+  activity: string,
+  emotion: string,
+  locale: string
+): AtmosphereData | null {
+  try {
+    const raw = localStorage.getItem(cacheKey(energy, environment, activity, emotion, locale));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.timestamp > CACHE_TTL) {
+      localStorage.removeItem(cacheKey(energy, environment, activity, emotion, locale));
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function setCached(
+  energy: number,
+  environment: string,
+  activity: string,
+  emotion: string,
+  locale: string,
+  data: AtmosphereData
+) {
+  try {
+    localStorage.setItem(
+      cacheKey(energy, environment, activity, emotion, locale),
+      JSON.stringify({ data, timestamp: Date.now() })
+    );
+  } catch {
+    // storage full, ignore
+  }
 }
 
 export function useAtmosphere(
@@ -14,11 +59,20 @@ export function useAtmosphere(
   emotion: string,
   locale: string
 ) {
-  const [data, setData] = useState<AtmosphereData | null>(null);
+  const [data, setData] = useState<AtmosphereData | null>(() =>
+    getCached(energy, environment, activity, emotion, locale)
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchAtmosphere = useCallback(async () => {
+    const cached = getCached(energy, environment, activity, emotion, locale);
+    if (cached) {
+      setData(cached);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -34,18 +88,14 @@ export function useAtmosphere(
       }
 
       const result = await res.json();
+      setCached(energy, environment, activity, emotion, locale, result);
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate atmosphere');
-      setData(null);
     } finally {
       setLoading(false);
     }
   }, [energy, environment, activity, emotion, locale]);
-
-  useEffect(() => {
-    fetchAtmosphere();
-  }, [fetchAtmosphere]);
 
   return { data, loading, error, refetch: fetchAtmosphere };
 }
