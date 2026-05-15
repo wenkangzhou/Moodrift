@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect, Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useAppStore } from '@/stores/useAppStore';
-import { generateMood } from '@/lib/moods';
+import { generateMockMood } from '@/lib/moods';
 import * as THREE from 'three';
 
 function OrbMesh({ color, secondary, energy }: { color: string; secondary: string; energy: number }) {
@@ -72,7 +72,7 @@ function Scene() {
     return unsub;
   }, []);
 
-  const mood = generateMood(energy, environment, activity, emotion, locale);
+  const mood = generateMockMood(energy, environment, activity, emotion, locale);
 
   return (
     <>
@@ -94,7 +94,7 @@ function FallbackOrb() {
     return unsub;
   }, []);
 
-  const mood = generateMood(energy, environment, activity, emotion, locale);
+  const mood = generateMockMood(energy, environment, activity, emotion, locale);
 
   return (
     <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center animate-float">

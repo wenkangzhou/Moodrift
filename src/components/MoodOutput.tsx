@@ -1,10 +1,14 @@
 'use client';
 
+import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/useAppStore';
-import { generateMood } from '@/lib/moods';
+import { useAtmosphere } from '@/hooks/useAtmosphere';
+import { useMusicTracks } from '@/hooks/useSpotifyTracks';
+import { generateMockMood } from '@/lib/moods';
 import { Badge } from '@/components/ui/badge';
+import { AudioPlayer } from '@/components/AudioPlayer';
 import Image from 'next/image';
 
 export function MoodOutput() {
@@ -12,12 +16,49 @@ export function MoodOutput() {
   const { t, i18n } = useTranslation('common');
   const locale = i18n.language;
 
-  const mood = generateMood(energy, environment, activity, emotion, locale);
+  const {
+    data: atmosphere,
+    loading: atmosphereLoading,
+    error: atmosphereError,
+  } = useAtmosphere(energy, environment, activity, emotion, locale);
+
+  const mockMood = useMemo(
+    () => generateMockMood(energy, environment, activity, emotion, locale),
+    [energy, environment, activity, emotion, locale]
+  );
+
+  const title = atmosphere?.title ?? mockMood.title;
+  const description = atmosphere?.description ?? mockMood.description;
+  const tags = atmosphere?.tags ?? mockMood.tags;
+  const bpm = atmosphere?.bpm ?? mockMood.bpm;
+
+  const searchQuery = useMemo(() => {
+    const keywords = [environment, activity, emotion, ...tags.slice(0, 2)];
+    return keywords.filter(Boolean).join(' ');
+  }, [environment, activity, emotion, tags]);
+
+  const {
+    tracks: musicTracks,
+    loading: tracksLoading,
+    error: tracksError,
+  } = useMusicTracks(searchQuery);
+
+  const displayTracks =
+    musicTracks.length > 0 && !tracksError
+      ? musicTracks
+      : mockMood.tracks.map((t) => ({
+          title: t.title,
+          artist: t.artist,
+          cover: t.cover,
+          previewUrl: null as string | null,
+          spotifyUrl: '#',
+          genre: t.genre,
+        }));
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key={`${energy}-${environment}-${activity}-${emotion}-${locale}`}
+        key={`${energy}-${environment}-${activity}-${emotion}-${locale}-${atmosphere?.title}`}
         initial={{ opacity: 0, y: 20, filter: 'blur(8px)' }}
         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         exit={{ opacity: 0, y: -10, filter: 'blur(8px)' }}
@@ -26,20 +67,33 @@ export function MoodOutput() {
       >
         {/* Title */}
         <div className="text-center mb-6">
-          <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-foreground mb-3">
-            {mood.title}
+          <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-foreground mb-3 min-h-[2.5rem]">
+            {atmosphereLoading ? (
+              <span className="inline-block w-48 h-8 bg-muted/30 rounded animate-pulse" />
+            ) : (
+              title
+            )}
           </h2>
-          <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-md mx-auto">
-            {mood.description}
+          <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-md mx-auto min-h-[1.5rem]">
+            {atmosphereLoading ? (
+              <span className="inline-block w-64 h-5 bg-muted/30 rounded animate-pulse" />
+            ) : (
+              description
+            )}
           </p>
+          {atmosphereError && (
+            <p className="text-[10px] text-muted-foreground/40 mt-1">
+              AI offline · using local preset
+            </p>
+          )}
         </div>
 
         {/* Tags */}
         <div className="flex items-center justify-center gap-3 mb-8 flex-wrap">
           <Badge variant="secondary" className="px-3 py-1 text-xs tracking-wide">
-            {mood.bpm} {t('output.bpm')}
+            {bpm} {t('output.bpm')}
           </Badge>
-          {mood.tags.map((tag) => (
+          {tags.map((tag) => (
             <Badge
               key={tag}
               variant="outline"
@@ -56,37 +110,66 @@ export function MoodOutput() {
             {t('output.recommended')}
           </p>
           <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory justify-start md:justify-center">
-            {mood.tracks.map((track, i) => (
-              <motion.div
-                key={`${track.title}-${i}`}
-                className="flex-shrink-0 w-36 snap-center cursor-pointer group"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.1, duration: 0.5 }}
-                whileHover={{ y: -4 }}
-              >
-                <div className="relative aspect-square rounded-xl overflow-hidden mb-3 bg-muted/30">
-                  <Image
-                    src={track.cover}
-                    alt={track.title}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    sizes="144px"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                </div>
-                <p className="text-sm font-medium text-foreground truncate">
-                  {track.title}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {track.artist}
-                </p>
-                <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">
-                  {track.genre}
-                </p>
-              </motion.div>
-            ))}
+            {tracksLoading
+              ? Array.from({ length: 5 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex-shrink-0 w-36 snap-center"
+                  >
+                    <div className="aspect-square rounded-xl bg-muted/30 animate-pulse mb-3" />
+                    <div className="h-4 bg-muted/30 rounded animate-pulse mb-2" />
+                    <div className="h-3 bg-muted/20 rounded animate-pulse w-2/3" />
+                  </div>
+                ))
+              : displayTracks.map((track, i) => (
+                  <motion.div
+                    key={`${track.title}-${i}`}
+                    className="flex-shrink-0 w-36 snap-center cursor-pointer group"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.1, duration: 0.5 }}
+                    whileHover={{ y: -4 }}
+                    onClick={() => {
+                      if (track.spotifyUrl && track.spotifyUrl !== '#') {
+                        window.open(track.spotifyUrl, '_blank');
+                      }
+                    }}
+                  >
+                    <div className="relative aspect-square rounded-xl overflow-hidden mb-3 bg-muted/30">
+                      {track.cover ? (
+                        <Image
+                          src={track.cover}
+                          alt={track.title}
+                          fill
+                          className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          sizes="144px"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-muted/50" />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <AudioPlayer
+                        previewUrl={track.previewUrl}
+                        trackId={`${track.title}-${i}`}
+                      />
+                    </div>
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {track.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {track.artist}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">
+                      {track.genre}
+                    </p>
+                  </motion.div>
+                ))}
           </div>
+          {tracksError && (
+            <p className="text-[10px] text-center text-muted-foreground/40 mt-1">
+              Jamendo offline · using local presets
+            </p>
+          )}
         </div>
       </motion.div>
     </AnimatePresence>

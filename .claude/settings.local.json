@@ -22,7 +22,11 @@
       "Bash(killall -9 node)",
       "Bash(lsof -t -i:4548)",
       "Bash(xargs kill -9)",
-      "Bash(lsof -i:4548)"
+      "Bash(lsof -i:4548)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(gh auth *)",
+      "Bash(ssh -T git@github.com)"
     ]
   }
 }

@@ -45,7 +45,7 @@ function hashString(str: string) {
   return Math.abs(h);
 }
 
-export function generateMood(
+export function generateMockMood(
   energy: number,
   environment: string,
   activity: string,
