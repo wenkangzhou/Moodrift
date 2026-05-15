@@ -46,8 +46,8 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         return;
       }
 
-      // Switching tracks: stop previous audio unconditionally
-      player.stop();
+      // Switching tracks: stop previous audio immediately (no fade-out overlap)
+      player.stop(true);
       cleanupProgress();
 
       set({ isLoading: true, currentTrack: track.name, progress: 0 });
@@ -79,7 +79,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
 
     pause: () => {
       const player = getPlayer();
-      player.stop();
+      player.stop(false);
       cleanupProgress();
       set({ isPlaying: false, progress: 0 });
     },

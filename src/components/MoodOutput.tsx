@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
+import { useAudioStore } from '@/stores/useAudioStore';
 import { useAtmosphere } from '@/hooks/useAtmosphere';
 import { generateMockMood } from '@/lib/moods';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,12 @@ export function MoodOutput() {
 
   const hasAiData = !!atmosphere;
   const tracks = mockMood.tracks;
+
+  useEffect(() => {
+    return () => {
+      useAudioStore.getState().pause();
+    };
+  }, [energy, environment, activity, emotion]);
 
   return (
     <AnimatePresence mode="wait">
