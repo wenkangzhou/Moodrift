@@ -91,7 +91,8 @@ export function MoodOutput() {
             <Badge
               key={tag}
               variant="outline"
-              className="px-3 py-1 text-xs tracking-wide border-border/50 text-muted-foreground"
+              className="px-3 py-1 text-xs tracking-wide border-border/50 text-muted-foreground cursor-default"
+              title={tag}
             >
               {tag}
             </Badge>

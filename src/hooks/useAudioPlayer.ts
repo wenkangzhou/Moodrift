@@ -1,8 +1,15 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GenerativePlayer, type GenerativeTrack } from '@/lib/generative-audio';
 
+// Global singleton player shared across all AudioPlayer instances
+let globalPlayer: GenerativePlayer | null = null;
+
+function getGlobalPlayer(): GenerativePlayer {
+  if (!globalPlayer) globalPlayer = new GenerativePlayer();
+  return globalPlayer;
+}
+
 export function useAudioPlayer() {
-  const playerRef = useRef<GenerativePlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -20,13 +27,11 @@ export function useAudioPlayer() {
 
   const play = useCallback((track: GenerativeTrack) => {
     try {
-      if (!playerRef.current) {
-        playerRef.current = new GenerativePlayer();
-      }
+      const player = getGlobalPlayer();
 
-      // If same track is already playing, stop it
+      // If same track is already playing, stop it (toggle behavior)
       if (currentTrack === track.name && isPlaying) {
-        playerRef.current.stop();
+        player.stop();
         setIsPlaying(false);
         setCurrentTrack(null);
         setProgress(0);
@@ -36,16 +41,14 @@ export function useAudioPlayer() {
 
       setIsLoading(true);
 
-      // Stop current if different track
-      if (currentTrack !== track.name) {
-        playerRef.current.stop();
-      }
+      // Stop any currently playing track before starting new one
+      player.stop();
 
       setCurrentTrack(track.name);
       durationRef.current = track.duration;
       startTimeRef.current = Date.now();
 
-      playerRef.current.play(track, () => {
+      player.play(track, () => {
         setIsPlaying(false);
         setProgress(0);
         cleanupProgress();
@@ -72,20 +75,18 @@ export function useAudioPlayer() {
   }, [currentTrack, isPlaying, cleanupProgress]);
 
   const pause = useCallback(() => {
-    if (playerRef.current) {
-      playerRef.current.stop();
+    try {
+      const player = getGlobalPlayer();
+      player.stop();
       setIsPlaying(false);
       setProgress(0);
       cleanupProgress();
-    }
+    } catch {}
   }, [cleanupProgress]);
 
   useEffect(() => {
     return () => {
       cleanupProgress();
-      if (playerRef.current) {
-        playerRef.current.stop();
-      }
     };
   }, [cleanupProgress]);
 
