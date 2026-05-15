@@ -25,7 +25,7 @@ interface AudioStore {
   isPlaying: boolean;
   progress: number;
   isLoading: boolean;
-  playNetease: (track: NeteaseTrack) => void;
+  playNetease: (track: NeteaseTrack, fallback?: GenerativeTrack) => void;
   playGenerative: (track: GenerativeTrack) => void;
   pause: () => void;
 }
@@ -66,12 +66,13 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     progress: 0,
     isLoading: false,
 
-    playNetease: (track) => {
+    playNetease: (track, fallback) => {
       cleanup();
 
       const url = getNeteaseAudioUrl(track.id);
       audioEl = new Audio(url);
-      audioEl.crossOrigin = 'anonymous';
+      // Do NOT set crossOrigin — Netease does not send CORS headers,
+      // and plain <audio> can still play cross-domain without it.
 
       const unified: UnifiedTrack = {
         name: track.name,
@@ -84,14 +85,22 @@ export const useAudioStore = create<AudioStore>((set, get) => {
 
       set({ isLoading: true, currentTrack: unified, progress: 0 });
 
+      let hasStarted = false;
+
       const onCanPlay = () => {
         audioEl!.play().catch((err) => {
           console.warn('[AudioStore] Netease play failed:', err);
-          set({ isLoading: false, isPlaying: false });
+          cleanup();
+          if (fallback) {
+            get().playGenerative(fallback);
+          } else {
+            set({ isLoading: false, isPlaying: false });
+          }
         });
       };
 
       const onPlay = () => {
+        hasStarted = true;
         set({ isLoading: false, isPlaying: true, progress: 0 });
         startProgress(track.duration * 1000);
       };
@@ -104,7 +113,11 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       const onError = () => {
         console.warn('[AudioStore] Netease audio load error, id:', track.id);
         cleanup();
-        set({ isLoading: false, isPlaying: false });
+        if (!hasStarted && fallback) {
+          get().playGenerative(fallback);
+        } else {
+          set({ isLoading: false, isPlaying: false });
+        }
       };
 
       audioEl.addEventListener('canplaythrough', onCanPlay, { once: true });

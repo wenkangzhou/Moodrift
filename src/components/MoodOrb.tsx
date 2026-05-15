@@ -165,6 +165,7 @@ function FallbackOrb() {
 export function MoodOrb() {
   const [mounted, setMounted] = useState(false);
   const [webglFailed, setWebglFailed] = useState(false);
+  const { isPlaying, pause } = useAudioStore();
 
   useEffect(() => {
     setMounted(true);
@@ -177,20 +178,33 @@ export function MoodOrb() {
     }
   }, []);
 
+  const handleClick = () => {
+    if (isPlaying) {
+      pause();
+    } else {
+      // Dispatch a custom event that MoodOutput listens to
+      window.dispatchEvent(new CustomEvent('moodrift:request-play'));
+    }
+  };
+
   if (!mounted) {
     return (
-      <div className="w-full h-[45vh] md:h-[50vh] flex items-center justify-center">
+      <div className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center">
         <div className="w-48 h-48 md:w-60 md:h-60 rounded-full bg-muted/20 animate-pulse" />
       </div>
     );
   }
 
   if (webglFailed) {
-    return <FallbackOrb />;
+    return (
+      <div onClick={handleClick} className="cursor-pointer">
+        <FallbackOrb />
+      </div>
+    );
   }
 
   return (
-    <div className="w-full h-[45vh] md:h-[50vh] relative">
+    <div className="w-full h-[32vh] md:h-[38vh] relative cursor-pointer" onClick={handleClick}>
       <Canvas
         camera={{ position: [0, 0, 4], fov: 45 }}
         gl={{ antialias: true, alpha: true }}

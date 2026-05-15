@@ -16,20 +16,20 @@ export function MoodControls() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 1, delay: 0.3, ease: 'easeOut' }}
-      className="w-full max-w-xl mx-auto px-6 mb-10"
+      className="w-full max-w-md mx-auto"
     >
-      <div className="space-y-6">
+      <div className="space-y-2">
         {/* Energy Slider */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs tracking-widest uppercase text-muted-foreground">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[10px] tracking-widest uppercase text-muted-foreground">
             <span>{t('controls.energy')}</span>
             <span className="tabular-nums">{energy}%</span>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">{t('controls.calm')}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{t('controls.calm')}</span>
             <Slider
               value={[energy]}
               onValueChange={(v) => setEnergy(Array.isArray(v) ? v[0] : v)}
@@ -37,11 +37,11 @@ export function MoodControls() {
               step={1}
               className="flex-1"
             />
-            <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">{t('controls.intense')}</span>
+            <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{t('controls.intense')}</span>
           </div>
         </div>
 
-        {/* Environment Tabs */}
+        {/* Environment */}
         <ControlGroup label={t('controls.environment')}>
           <Tabs value={environment} onValueChange={(v) => setEnvironment(v as Environment)}>
             <TabsList className="bg-transparent p-0 gap-1 flex-wrap h-auto">
@@ -49,7 +49,7 @@ export function MoodControls() {
                 <TabsTrigger
                   key={env}
                   value={env}
-                  className="text-xs tracking-wide px-3 py-1.5 rounded-full data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none border border-transparent data-[state=active]:border-primary/20 transition-all duration-300"
+                  className="text-[10px] tracking-wide px-2.5 py-1 rounded-full data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none border border-transparent data-[state=active]:border-primary/20 transition-all duration-300"
                 >
                   {t(`environments.${env}`)}
                 </TabsTrigger>
@@ -58,7 +58,7 @@ export function MoodControls() {
           </Tabs>
         </ControlGroup>
 
-        {/* Activity Tabs */}
+        {/* Activity */}
         <ControlGroup label={t('controls.activity')}>
           <Tabs value={activity} onValueChange={(v) => setActivity(v as Activity)}>
             <TabsList className="bg-transparent p-0 gap-1 flex-wrap h-auto">
@@ -66,7 +66,7 @@ export function MoodControls() {
                 <TabsTrigger
                   key={act}
                   value={act}
-                  className="text-xs tracking-wide px-3 py-1.5 rounded-full data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none border border-transparent data-[state=active]:border-primary/20 transition-all duration-300"
+                  className="text-[10px] tracking-wide px-2.5 py-1 rounded-full data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none border border-transparent data-[state=active]:border-primary/20 transition-all duration-300"
                 >
                   {t(`activities.${act}`)}
                 </TabsTrigger>
@@ -75,7 +75,7 @@ export function MoodControls() {
           </Tabs>
         </ControlGroup>
 
-        {/* Emotion Tabs */}
+        {/* Emotion */}
         <ControlGroup label={t('controls.emotion')}>
           <Tabs value={emotion} onValueChange={(v) => setEmotion(v as Emotion)}>
             <TabsList className="bg-transparent p-0 gap-1 flex-wrap h-auto">
@@ -83,7 +83,7 @@ export function MoodControls() {
                 <TabsTrigger
                   key={emo}
                   value={emo}
-                  className="text-xs tracking-wide px-3 py-1.5 rounded-full data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none border border-transparent data-[state=active]:border-primary/20 transition-all duration-300"
+                  className="text-[10px] tracking-wide px-2.5 py-1 rounded-full data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none border border-transparent data-[state=active]:border-primary/20 transition-all duration-300"
                 >
                   {t(`emotions.${emo}`)}
                 </TabsTrigger>
@@ -98,8 +98,8 @@ export function MoodControls() {
 
 function ControlGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-2">
-      <span className="text-xs tracking-widest uppercase text-muted-foreground">{label}</span>
+    <div className="space-y-1">
+      <span className="text-[10px] tracking-widest uppercase text-muted-foreground">{label}</span>
       {children}
     </div>
   );

@@ -36,7 +36,7 @@ export function BackgroundFlow() {
     };
 
     const palette = palettes[environment] ?? palettes.night;
-    const particleCount = Math.floor(30 + (energy / 100) * 40);
+    const particleCount = Math.floor(40 + (energy / 100) * 50);
 
     interface Particle {
       x: number;
@@ -53,11 +53,11 @@ export function BackgroundFlow() {
       particles.push({
         x: Math.random() * w,
         y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
-        radius: Math.random() * 2 + 1,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        radius: Math.random() * 3 + 1.5,
         color: palette[Math.floor(Math.random() * palette.length)],
-        alpha: Math.random() * 0.5 + 0.2,
+        alpha: Math.random() * 0.6 + 0.3,
       });
     }
 
@@ -94,7 +94,7 @@ export function BackgroundFlow() {
           const dx = p.x - q.x;
           const dy = p.y - q.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 120) {
+          if (dist < 150) {
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(q.x, q.y);
@@ -102,31 +102,31 @@ export function BackgroundFlow() {
               /[0-9a-fA-F]{2}$/,
               () =>
                 Math.floor(
-                  (0.08 * (1 - dist / 120) * (isPlaying ? 1.5 : 1)) * 255
+                  (0.12 * (1 - dist / 150) * (isPlaying ? 2 : 1)) * 255
                 )
                   .toString(16)
                   .padStart(2, '0')
             );
-            ctx.lineWidth = 0.5;
+            ctx.lineWidth = isPlaying ? 0.8 : 0.5;
             ctx.stroke();
           }
         }
       }
 
-      // Subtle wave overlay at bottom when playing
+      // Wave overlay at bottom when playing
       if (isPlaying) {
         ctx.beginPath();
-        for (let x = 0; x < w; x += 4) {
+        for (let x = 0; x < w; x += 3) {
           const y =
-            h - 80 + Math.sin(x * 0.01 + time * 3) * 20 + Math.sin(x * 0.005 + time * 2) * 15;
+            h - 100 + Math.sin(x * 0.008 + time * 3) * 30 + Math.sin(x * 0.004 + time * 2) * 20;
           if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
         ctx.lineTo(w, h);
         ctx.lineTo(0, h);
         ctx.closePath();
-        const grad = ctx.createLinearGradient(0, h - 120, 0, h);
-        grad.addColorStop(0, palette[0].replace('20', '08'));
+        const grad = ctx.createLinearGradient(0, h - 160, 0, h);
+        grad.addColorStop(0, palette[0].replace('20', '12'));
         grad.addColorStop(1, 'transparent');
         ctx.fillStyle = grad;
         ctx.fill();
@@ -147,7 +147,7 @@ export function BackgroundFlow() {
     <canvas
       ref={canvasRef}
       className="fixed inset-0 pointer-events-none z-0"
-      style={{ opacity: 0.6 }}
+      style={{ opacity: 0.9 }}
     />
   );
 }

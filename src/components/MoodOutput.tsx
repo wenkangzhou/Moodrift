@@ -10,7 +10,6 @@ import { useNeteasePlaylist } from '@/hooks/useNeteasePlaylist';
 import { useAtmosphere } from '@/hooks/useAtmosphere';
 import { generateMockMood } from '@/lib/moods';
 import { Badge } from '@/components/ui/badge';
-import Image from 'next/image';
 
 export function MoodOutput() {
   const { energy, environment, activity, emotion } = useAppStore();
@@ -52,7 +51,7 @@ export function MoodOutput() {
     }
     autoPlayTimer.current = setTimeout(() => {
       refetchNetease();
-    }, 600);
+    }, 500);
   }, [refetchNetease]);
 
   useEffect(() => {
@@ -64,12 +63,28 @@ export function MoodOutput() {
     };
   }, [environment, triggerAutoPlay]);
 
-  // Play netease track when it loads
+  // Play netease track when it loads; fallback to generative on failure
   useEffect(() => {
     if (neteaseTrack && !neteaseLoading) {
-      playNetease(neteaseTrack);
+      playNetease(neteaseTrack, mockMood.tracks[0]);
     }
-  }, [neteaseTrack, neteaseLoading, playNetease]);
+  }, [neteaseTrack, neteaseLoading, playNetease, mockMood]);
+
+  // Listen for Orb click play request
+  useEffect(() => {
+    const handler = () => {
+      if (!isPlaying) {
+        if (neteaseTrack) {
+          playNetease(neteaseTrack, mockMood.tracks[0]);
+        } else {
+          const track = mockMood.tracks[0];
+          if (track) playGenerative(track);
+        }
+      }
+    };
+    window.addEventListener('moodrift:request-play', handler);
+    return () => window.removeEventListener('moodrift:request-play', handler);
+  }, [isPlaying, neteaseTrack, mockMood, playNetease, playGenerative]);
 
   // Stop audio when component unmounts or mood params change
   useEffect(() => {
@@ -82,9 +97,8 @@ export function MoodOutput() {
     if (isPlaying) {
       pause();
     } else {
-      // Retry netease first, fallback to generative
       if (neteaseTrack) {
-        playNetease(neteaseTrack);
+        playNetease(neteaseTrack, mockMood.tracks[0]);
       } else {
         const track = mockMood.tracks[0];
         if (track) playGenerative(track);
@@ -92,132 +106,101 @@ export function MoodOutput() {
     }
   };
 
-  const coverUrl =
-    currentTrack?.source === 'netease'
-      ? currentTrack.cover
-      : mockMood.tracks[0]?.cover;
-
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key={`${energy}-${environment}-${activity}-${emotion}-${locale}-${atmosphere?.title}`}
-        initial={{ opacity: 0, y: 20, filter: 'blur(8px)' }}
-        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        exit={{ opacity: 0, y: -10, filter: 'blur(8px)' }}
-        transition={{ duration: 0.8, ease: 'easeOut' }}
-        className="w-full max-w-xl mx-auto px-6 pb-24 md:pb-8"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+        className="text-center"
       >
-        {/* AI Generate Button */}
-        <div className="flex justify-center mb-6">
-          <button
-            onClick={refetchAtmosphere}
-            disabled={atmosphereLoading}
-            className="group flex items-center gap-2 px-4 py-2 rounded-full border border-border/50 bg-background/60 backdrop-blur-sm text-xs tracking-wider uppercase text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {atmosphereLoading ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Generating...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
-                <span>{hasAiData ? 'Regenerate' : 'AI Generate'}</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Title */}
-        <div className="text-center mb-6">
-          <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-foreground mb-3 min-h-[2.5rem]">
-            {title}
-          </h2>
-          <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-md mx-auto min-h-[1.5rem]">
-            {description}
+        {/* Title + Description */}
+        <h2 className="text-xl md:text-2xl font-medium tracking-tight text-foreground mb-1">
+          {title}
+        </h2>
+        <p className="text-xs md:text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto mb-2">
+          {description}
+        </p>
+        {atmosphereError && (
+          <p className="text-[9px] text-muted-foreground/40 mb-1">
+            AI offline · using local preset
           </p>
-          {atmosphereError && (
-            <p className="text-[10px] text-muted-foreground/40 mt-1">
-              AI offline · using local preset
-            </p>
-          )}
-        </div>
+        )}
 
         {/* Tags */}
-        <div className="flex items-center justify-center gap-3 mb-8 flex-wrap">
-          <Badge variant="secondary" className="px-3 py-1 text-xs tracking-wide">
+        <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
+          <Badge variant="secondary" className="px-2 py-0.5 text-[10px] tracking-wide">
             {bpm} {t('output.bpm')}
           </Badge>
           {tags.map((tag) => (
             <Badge
               key={tag}
               variant="outline"
-              className="px-3 py-1 text-xs tracking-wide border-border/50 text-muted-foreground cursor-default"
-              title={tag}
+              className="px-2 py-0.5 text-[10px] tracking-wide border-border/50 text-muted-foreground cursor-default"
             >
               {tag}
             </Badge>
           ))}
         </div>
 
-        {/* Now Playing */}
-        <div className="flex flex-col items-center gap-4">
-          <div className="relative w-48 h-48 rounded-2xl overflow-hidden bg-muted/30 shadow-2xl shadow-primary/10">
-            {coverUrl ? (
-              <Image
-                src={coverUrl}
-                alt={currentTrack?.name ?? 'cover'}
-                fill
-                className="object-cover"
-                sizes="192px"
-              />
+        {/* Playback row */}
+        <div className="flex items-center justify-center gap-2">
+          {/* AI Generate button */}
+          <button
+            onClick={refetchAtmosphere}
+            disabled={atmosphereLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-background/60 backdrop-blur-sm text-[10px] tracking-wider uppercase text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all disabled:opacity-50"
+          >
+            {atmosphereLoading ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
-              <div className="w-full h-full bg-muted/50" />
+              <Sparkles className="w-3 h-3" />
             )}
-            {/* Progress overlay */}
-            {isPlaying && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted/40">
-                <motion.div
-                  className="h-full bg-primary"
-                  style={{ width: `${progress}%` }}
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
-            )}
-            {/* Play/Pause overlay button */}
-            <button
-              onClick={handleTogglePlay}
-              disabled={neteaseLoading}
-              className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors disabled:opacity-50"
-            >
-              <div className="w-14 h-14 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-lg">
-                {neteaseLoading ? (
-                  <Loader2 className="w-6 h-6 animate-spin text-foreground" />
-                ) : isPlaying ? (
-                  <Pause className="w-6 h-6 text-foreground" />
-                ) : (
-                  <Play className="w-6 h-6 text-foreground ml-1" />
-                )}
-              </div>
-            </button>
-          </div>
+            <span>{hasAiData ? 'Regen' : 'AI'}</span>
+          </button>
 
-          {/* Track info */}
-          <div className="text-center">
-            <p className="text-base font-medium text-foreground">
-              {currentTrack?.name ?? t('output.ready')}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {currentTrack?.artist ?? ''}
-            </p>
-            {currentTrack?.source === 'netease' && (
-              <p className="text-[10px] text-muted-foreground/40 mt-1">NetEase Cloud Music</p>
+          {/* Play / Pause */}
+          <button
+            onClick={handleTogglePlay}
+            disabled={neteaseLoading}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/90 text-primary-foreground text-xs font-medium hover:bg-primary transition-colors disabled:opacity-50 shadow-lg shadow-primary/20"
+          >
+            {neteaseLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : isPlaying ? (
+              <Pause className="w-3.5 h-3.5" />
+            ) : (
+              <Play className="w-3.5 h-3.5 ml-0.5" />
             )}
-            {currentTrack?.source === 'generative' && (
-              <p className="text-[10px] text-muted-foreground/40 mt-1">Generative Audio</p>
-            )}
-          </div>
+            <span>
+              {neteaseLoading
+                ? 'Loading...'
+                : isPlaying
+                  ? currentTrack?.name ?? 'Playing'
+                  : 'Play Mood'}
+            </span>
+          </button>
         </div>
+
+        {/* Progress bar */}
+        {isPlaying && (
+          <div className="mt-2 w-48 mx-auto h-0.5 bg-muted/40 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-primary rounded-full"
+              style={{ width: `${progress}%` }}
+              transition={{ duration: 0.3 }}
+            />
+          </div>
+        )}
+
+        {/* Source badge */}
+        {currentTrack && (
+          <p className="text-[9px] text-muted-foreground/40 mt-1">
+            {currentTrack.source === 'netease' ? 'NetEase Cloud Music' : 'Generative Audio'}
+          </p>
+        )}
       </motion.div>
     </AnimatePresence>
   );
