@@ -50,22 +50,30 @@ export class GenerativePlayer {
     this.onEnded = onEnded;
 
     const ctx = this.getCtx();
+
+    // Critical: resume must succeed for audio to play
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      ctx.resume().catch((err) => {
+        console.warn('[GenerativePlayer] AudioContext resume failed:', err);
+      });
     }
+
+    console.log('[GenerativePlayer] Playing track:', track.name, 'state:', ctx.state, 'rootFreq:', track.rootFreq);
 
     this.isPlaying = true;
 
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = 0;
     this.masterGain.connect(ctx.destination);
-    this.masterGain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 2);
+    this.masterGain.gain.linearRampToValueAtTime(0.6, ctx.currentTime + 2);
 
     const scale = getScaleSemitones(track.scale);
 
-    track.voices.forEach((voice) => {
+    track.voices.forEach((voice, vi) => {
       const semitone = scale[voice.scaleIndex % scale.length] + voice.octave * 12;
       const freq = noteToFreq(semitone, track.rootFreq);
+
+      console.log(`[GenerativePlayer] Voice ${vi}: freq=${freq.toFixed(2)}Hz, type=${voice.type}, vol=${voice.volume}`);
 
       const osc = ctx.createOscillator();
       osc.type = voice.type;
@@ -110,32 +118,36 @@ export class GenerativePlayer {
     }
 
     const ctx = this.ctx;
-    if (!ctx || !this.masterGain) {
+    const masterGain = this.masterGain;
+    const nodes = this.nodes;
+
+    if (!ctx || !masterGain) {
       this.isPlaying = false;
       return;
     }
 
-    const now = ctx.currentTime;
-    this.masterGain.gain.cancelScheduledValues(now);
-    this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
-    this.masterGain.gain.linearRampToValueAtTime(0, now + 1.5);
+    // Detach from instance immediately so a subsequent play() is not affected
+    this.isPlaying = false;
+    this.masterGain = null;
+    this.nodes = [];
 
-    // Fade out individual voice gains too
-    this.nodes.forEach(({ gain }) => {
+    const now = ctx.currentTime;
+    masterGain.gain.cancelScheduledValues(now);
+    masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+    masterGain.gain.linearRampToValueAtTime(0, now + 1.5);
+
+    nodes.forEach(({ gain }) => {
       gain.gain.cancelScheduledValues(now);
       gain.gain.setValueAtTime(gain.gain.value, now);
       gain.gain.linearRampToValueAtTime(0, now + 1);
     });
 
     setTimeout(() => {
-      this.nodes.forEach(({ osc, lfo }) => {
+      nodes.forEach(({ osc, lfo }) => {
         try { osc.stop(); } catch {}
         try { lfo.stop(); } catch {}
       });
-      this.nodes = [];
-      this.masterGain?.disconnect();
-      this.masterGain = null;
-      this.isPlaying = false;
+      masterGain.disconnect();
       this.onEnded?.();
     }, 1600);
   }
@@ -146,7 +158,7 @@ export class GenerativePlayer {
 
   resumeIfSuspended() {
     if (this.ctx?.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
   }
 }

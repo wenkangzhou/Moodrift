@@ -19,50 +19,56 @@ export function useAudioPlayer() {
   }, []);
 
   const play = useCallback((track: GenerativeTrack) => {
-    if (!playerRef.current) {
-      playerRef.current = new GenerativePlayer();
-    }
-
-    // If same track is already playing, stop it
-    if (currentTrack === track.name && isPlaying) {
-      playerRef.current.stop();
-      setIsPlaying(false);
-      setCurrentTrack(null);
-      setProgress(0);
-      cleanupProgress();
-      return;
-    }
-
-    setIsLoading(true);
-
-    // Stop current if different track
-    if (currentTrack !== track.name) {
-      playerRef.current.stop();
-    }
-
-    setCurrentTrack(track.name);
-    durationRef.current = track.duration;
-    startTimeRef.current = Date.now();
-
-    playerRef.current.play(track, () => {
-      setIsPlaying(false);
-      setProgress(0);
-      cleanupProgress();
-    });
-
-    setIsLoading(false);
-    setIsPlaying(true);
-    setProgress(0);
-
-    cleanupProgress();
-    progressTimer.current = setInterval(() => {
-      const elapsed = (Date.now() - startTimeRef.current) / 1000;
-      const p = Math.min(100, (elapsed / durationRef.current) * 100);
-      setProgress(p);
-      if (p >= 100) {
-        cleanupProgress();
+    try {
+      if (!playerRef.current) {
+        playerRef.current = new GenerativePlayer();
       }
-    }, 300);
+
+      // If same track is already playing, stop it
+      if (currentTrack === track.name && isPlaying) {
+        playerRef.current.stop();
+        setIsPlaying(false);
+        setCurrentTrack(null);
+        setProgress(0);
+        cleanupProgress();
+        return;
+      }
+
+      setIsLoading(true);
+
+      // Stop current if different track
+      if (currentTrack !== track.name) {
+        playerRef.current.stop();
+      }
+
+      setCurrentTrack(track.name);
+      durationRef.current = track.duration;
+      startTimeRef.current = Date.now();
+
+      playerRef.current.play(track, () => {
+        setIsPlaying(false);
+        setProgress(0);
+        cleanupProgress();
+      });
+
+      setIsLoading(false);
+      setIsPlaying(true);
+      setProgress(0);
+
+      cleanupProgress();
+      progressTimer.current = setInterval(() => {
+        const elapsed = (Date.now() - startTimeRef.current) / 1000;
+        const p = Math.min(100, (elapsed / durationRef.current) * 100);
+        setProgress(p);
+        if (p >= 100) {
+          cleanupProgress();
+        }
+      }, 300);
+    } catch (err) {
+      console.error('[useAudioPlayer] Play failed:', err);
+      setIsLoading(false);
+      setIsPlaying(false);
+    }
   }, [currentTrack, isPlaying, cleanupProgress]);
 
   const pause = useCallback(() => {

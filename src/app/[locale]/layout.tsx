@@ -1,15 +1,9 @@
 import type { Metadata } from 'next';
-import { Geist } from 'next/font/google';
 import '../globals.css';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { I18nProvider } from '@/components/providers/i18n-provider';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { languages } from '@/i18n/config';
-
-const geist = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
 
 export const metadata: Metadata = {
   title: 'Moodrift',
@@ -34,8 +28,8 @@ export default async function LocaleLayout({
   const { locale } = await params;
 
   return (
-    <html lang={locale} className={`${geist.variable} h-full antialiased`} suppressHydrationWarning>
-      <body className="min-h-full bg-background text-foreground">
+    <html lang={locale} className="h-full antialiased" suppressHydrationWarning>
+      <body className="min-h-full bg-background text-foreground font-sans">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
           <I18nProvider locale={locale}>
             <div className="fixed top-6 right-6 z-50">
