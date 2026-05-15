@@ -26,7 +26,11 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(gh auth *)",
-      "Bash(ssh -T git@github.com)"
+      "Bash(ssh -T git@github.com)",
+      "Bash(lsof -ti:4548)",
+      "Bash(python3 -m json.tool)",
+      "Bash(git reset *)",
+      "WebSearch"
     ]
   }
 }

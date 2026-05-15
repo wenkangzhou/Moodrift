@@ -2,24 +2,22 @@
 
 import { Play, Pause, Loader2 } from 'lucide-react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
+import { type GenerativeTrack } from '@/lib/generative-audio';
 
 interface AudioPlayerProps {
-  previewUrl: string | null;
-  trackId: string;
+  track: GenerativeTrack;
 }
 
-export function AudioPlayer({ previewUrl, trackId }: AudioPlayerProps) {
+export function AudioPlayer({ track }: AudioPlayerProps) {
   const { isPlaying, currentTrack, progress, isLoading, play, pause } = useAudioPlayer();
 
-  if (!previewUrl) return null;
-
-  const isThisPlaying = isPlaying && currentTrack === previewUrl;
+  const isThisPlaying = isPlaying && currentTrack === track.name;
 
   const toggle = () => {
     if (isThisPlaying) {
       pause();
     } else {
-      play(previewUrl);
+      play(track);
     }
   };
 

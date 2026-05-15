@@ -1,7 +1,7 @@
-export interface Track {
-  title: string;
-  artist: string;
-  genre: string;
+import { type GenerativeTrack, type SynthVoice } from './generative-audio';
+import { type ScaleName } from './music-theory';
+
+export interface Track extends GenerativeTrack {
   cover: string;
 }
 
@@ -128,11 +128,69 @@ export function generateMockMood(
     ? ['雨滴节奏', '城市呼吸', '远山回响', '夜空飞行', '迷雾中']
     : ['Drop Rhythm', 'City Breath', 'Distant Echo', 'Night Flight', 'Into the Mist'];
 
+  const envFreq: Record<string, number> = {
+    rain: 110,
+    city: 146.83,
+    mountain: 82.41,
+    night: 98,
+    sunset: 130.81,
+  };
+  const emoMod: Record<string, number> = {
+    happy: 1.122,
+    dreamy: 1,
+    melancholy: 0.891,
+    lonely: 0.944,
+  };
+  const rootFreq = (envFreq[environment] ?? 110) * (emoMod[emotion] ?? 1);
+  const duration = 50 + (energy / 100) * 40;
+
+  const scale: ScaleName = emotion === 'happy' ? 'major'
+    : emotion === 'melancholy' ? 'minor'
+    : emotion === 'dreamy' ? 'dorian'
+    : 'pentatonicMinor';
+
+  const voicePresets: SynthVoice[][] = [
+    // Drone — pure sustained tones
+    [
+      { type: 'sine', octave: 0, scaleIndex: 0, detune: -5, volume: 0.12, attack: 3, release: 4, filterFreq: 350, filterQ: 0.5, lfoRate: 0.08, lfoDepth: 0.2 },
+      { type: 'sine', octave: 1, scaleIndex: 2, detune: 3, volume: 0.06, attack: 4, release: 5, filterFreq: 550, filterQ: 0.3, lfoRate: 0.12, lfoDepth: 0.15 },
+      { type: 'triangle', octave: 2, scaleIndex: 4, detune: -2, volume: 0.03, attack: 5, release: 6, filterFreq: 800, filterQ: 0.5, lfoRate: 0.06, lfoDepth: 0.25 },
+    ],
+    // Pad — warm, wider
+    [
+      { type: 'triangle', octave: 0, scaleIndex: 0, detune: -8, volume: 0.1, attack: 2, release: 3, filterFreq: 450, filterQ: 0.7, lfoRate: 0.1, lfoDepth: 0.3 },
+      { type: 'sine', octave: 1, scaleIndex: 3, detune: 5, volume: 0.07, attack: 3, release: 4, filterFreq: 600, filterQ: 0.4, lfoRate: 0.14, lfoDepth: 0.2 },
+      { type: 'sine', octave: 1, scaleIndex: 2, detune: -3, volume: 0.05, attack: 3.5, release: 5, filterFreq: 500, filterQ: 0.5, lfoRate: 0.09, lfoDepth: 0.18 },
+    ],
+    // Textural — more harmonics
+    [
+      { type: 'sawtooth', octave: 0, scaleIndex: 0, detune: -4, volume: 0.04, attack: 1.5, release: 2.5, filterFreq: 300, filterQ: 1.2, lfoRate: 0.2, lfoDepth: 0.4 },
+      { type: 'sine', octave: 1, scaleIndex: 2, detune: 6, volume: 0.08, attack: 2.5, release: 3.5, filterFreq: 700, filterQ: 0.4, lfoRate: 0.11, lfoDepth: 0.22 },
+      { type: 'triangle', octave: 2, scaleIndex: 4, detune: -1, volume: 0.04, attack: 3, release: 4, filterFreq: 1200, filterQ: 0.6, lfoRate: 0.15, lfoDepth: 0.3 },
+    ],
+    // Bass-heavy — low and deep
+    [
+      { type: 'sine', octave: -1, scaleIndex: 0, detune: 0, volume: 0.14, attack: 4, release: 5, filterFreq: 200, filterQ: 0.3, lfoRate: 0.05, lfoDepth: 0.15 },
+      { type: 'triangle', octave: 0, scaleIndex: 2, detune: -6, volume: 0.08, attack: 3, release: 4, filterFreq: 350, filterQ: 0.8, lfoRate: 0.07, lfoDepth: 0.2 },
+      { type: 'sine', octave: 1, scaleIndex: 4, detune: 4, volume: 0.04, attack: 5, release: 6, filterFreq: 500, filterQ: 0.4, lfoRate: 0.1, lfoDepth: 0.12 },
+    ],
+    // Bright — higher, airy
+    [
+      { type: 'sine', octave: 2, scaleIndex: 0, detune: -3, volume: 0.08, attack: 2, release: 3, filterFreq: 1500, filterQ: 0.5, lfoRate: 0.18, lfoDepth: 0.25 },
+      { type: 'triangle', octave: 1, scaleIndex: 2, detune: 5, volume: 0.06, attack: 2.5, release: 3.5, filterFreq: 1000, filterQ: 0.6, lfoRate: 0.22, lfoDepth: 0.3 },
+      { type: 'sine', octave: 3, scaleIndex: 4, detune: -2, volume: 0.03, attack: 3, release: 4, filterFreq: 2000, filterQ: 0.4, lfoRate: 0.25, lfoDepth: 0.2 },
+    ],
+  ];
+
   const tracks: Track[] = pickCovers(seed, 5).map((cover, i) => ({
-    title: titles[(seed + i * 2) % titles.length] + (i > 0 ? ` ${i + 1}` : ''),
+    name: titles[(seed + i * 2) % titles.length] + (i > 0 ? ` ${i + 1}` : ''),
     artist: artists[(seed + i * 3) % artists.length],
     genre: tags[i % tags.length],
     cover,
+    duration,
+    rootFreq,
+    scale,
+    voices: voicePresets[i % voicePresets.length],
   }));
 
   const colorMap: Record<string, { primary: string; secondary: string; gradient: string }> = {

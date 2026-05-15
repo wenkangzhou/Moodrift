@@ -1,12 +1,11 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/stores/useAppStore';
 import { useAtmosphere } from '@/hooks/useAtmosphere';
-import { useMusicTracks } from '@/hooks/useSpotifyTracks';
 import { generateMockMood } from '@/lib/moods';
 import { Badge } from '@/components/ui/badge';
 import { AudioPlayer } from '@/components/AudioPlayer';
@@ -35,36 +34,7 @@ export function MoodOutput() {
   const bpm = atmosphere?.bpm ?? mockMood.bpm;
 
   const hasAiData = !!atmosphere;
-
-  const [activeTag, setActiveTag] = useState<string | null>(null);
-
-  useEffect(() => {
-    setActiveTag(null);
-  }, [energy, environment, activity, emotion]);
-
-  const searchQuery = useMemo(() => {
-    if (activeTag) return activeTag;
-    const keywords = [environment, activity, emotion, ...tags.slice(0, 2)];
-    return keywords.filter(Boolean).join(' ');
-  }, [environment, activity, emotion, tags, activeTag]);
-
-  const {
-    tracks: musicTracks,
-    loading: tracksLoading,
-    error: tracksError,
-  } = useMusicTracks(searchQuery);
-
-  const displayTracks =
-    musicTracks.length > 0 && !tracksError
-      ? musicTracks
-      : mockMood.tracks.map((t) => ({
-          title: t.title,
-          artist: t.artist,
-          cover: t.cover,
-          previewUrl: null as string | null,
-          spotifyUrl: '#',
-          genre: t.genre,
-        }));
+  const tracks = mockMood.tracks;
 
   return (
     <AnimatePresence mode="wait">
@@ -120,13 +90,8 @@ export function MoodOutput() {
           {tags.map((tag) => (
             <Badge
               key={tag}
-              variant={activeTag === tag ? 'secondary' : 'outline'}
-              className={`px-3 py-1 text-xs tracking-wide cursor-pointer transition-colors ${
-                activeTag === tag
-                  ? 'border-primary/50 text-primary'
-                  : 'border-border/50 text-muted-foreground hover:border-primary/40 hover:text-foreground'
-              }`}
-              onClick={() => setActiveTag((prev) => (prev === tag ? null : tag))}
+              variant="outline"
+              className="px-3 py-1 text-xs tracking-wide border-border/50 text-muted-foreground"
             >
               {tag}
             </Badge>
@@ -139,66 +104,42 @@ export function MoodOutput() {
             {t('output.recommended')}
           </p>
           <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory justify-start md:justify-center">
-            {tracksLoading
-              ? Array.from({ length: 5 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="flex-shrink-0 w-36 snap-center"
-                  >
-                    <div className="aspect-square rounded-xl bg-muted/30 animate-pulse mb-3" />
-                    <div className="h-4 bg-muted/30 rounded animate-pulse mb-2" />
-                    <div className="h-3 bg-muted/20 rounded animate-pulse w-2/3" />
-                  </div>
-                ))
-              : displayTracks.map((track, i) => (
-                  <motion.div
-                    key={`${track.title}-${i}`}
-                    className="flex-shrink-0 w-36 snap-center cursor-pointer group"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.1, duration: 0.5 }}
-                    whileHover={{ y: -4 }}
-                    onClick={() => {
-                      if (track.spotifyUrl && track.spotifyUrl !== '#') {
-                        window.open(track.spotifyUrl, '_blank');
-                      }
-                    }}
-                  >
-                    <div className="relative aspect-square rounded-xl overflow-hidden mb-3 bg-muted/30">
-                      {track.cover ? (
-                        <Image
-                          src={track.cover}
-                          alt={track.title}
-                          fill
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
-                          sizes="144px"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-muted/50" />
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <AudioPlayer
-                        previewUrl={track.previewUrl}
-                        trackId={`${track.title}-${i}`}
-                      />
-                    </div>
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {track.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {track.artist}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">
-                      {track.genre}
-                    </p>
-                  </motion.div>
-                ))}
+            {tracks.map((track, i) => (
+              <motion.div
+                key={`${track.name}-${i}`}
+                className="flex-shrink-0 w-36 snap-center cursor-pointer group"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.1, duration: 0.5 }}
+                whileHover={{ y: -4 }}
+              >
+                <div className="relative aspect-square rounded-xl overflow-hidden mb-3 bg-muted/30">
+                  {track.cover ? (
+                    <Image
+                      src={track.cover}
+                      alt={track.name}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      sizes="144px"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-muted/50" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <AudioPlayer track={track} />
+                </div>
+                <p className="text-sm font-medium text-foreground truncate">
+                  {track.name}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {track.artist}
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">
+                  {track.genre}
+                </p>
+              </motion.div>
+            ))}
           </div>
-          {tracksError && (
-            <p className="text-[10px] text-center text-muted-foreground/40 mt-1">
-              Jamendo offline · using local presets
-            </p>
-          )}
         </div>
       </motion.div>
     </AnimatePresence>
