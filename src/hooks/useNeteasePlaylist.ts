@@ -79,9 +79,11 @@ export function useNeteasePlaylist() {
 
     if (uniqueTracks.length > 0) {
       setCandidates(shuffle(uniqueTracks));
+      console.log('[useNeteasePlaylist] Loaded', uniqueTracks.length, 'tracks from', triedPlaylists.current.size, 'playlists');
     } else {
       setError('Could not load tracks from Netease');
       setCandidates([]);
+      console.warn('[useNeteasePlaylist] No tracks loaded, tried', triedPlaylists.current.size, 'playlists');
     }
 
     setLoading(false);
