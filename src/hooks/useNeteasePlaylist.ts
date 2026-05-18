@@ -114,15 +114,13 @@ export function useNeteasePlaylist() {
     }
   }, [candidates.length, loading, error, fetchCandidates]);
 
-  const nextTrack = useCallback(() => {
+  const nextTrack = useCallback((): NeteaseTrack | null => {
     if (candidates.length === 0) return null;
-    let resolvedIndex = 0;
-    setIndex((prev) => {
-      resolvedIndex = prev < candidates.length - 1 ? prev + 1 : 0;
-      return resolvedIndex;
-    });
-    return candidates[resolvedIndex] ?? null;
-  }, [candidates]);
+    if (candidates.length === 1) return candidates[0];
+    const nextIndex = index < candidates.length - 1 ? index + 1 : 0;
+    setIndex(nextIndex);
+    return candidates[nextIndex] ?? null;
+  }, [candidates, index]);
 
   const track = candidates[index] ?? null;
 

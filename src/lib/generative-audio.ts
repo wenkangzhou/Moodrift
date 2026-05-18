@@ -169,6 +169,18 @@ export class GenerativePlayer {
     return this.isPlaying;
   }
 
+  suspend() {
+    if (this.ctx?.state === 'running') {
+      this.ctx.suspend().catch(() => {});
+    }
+  }
+
+  resume() {
+    if (this.ctx?.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
   resumeIfSuspended() {
     if (this.ctx?.state === 'suspended') {
       this.ctx.resume().catch(() => {});
