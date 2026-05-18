@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 export interface AtmosphereData {
   title: string;
@@ -39,18 +39,28 @@ function setCached(trackName: string, artist: string, locale: string, data: Atmo
 }
 
 export function useAtmosphere(trackName: string | null, artist: string | null, locale: string) {
-  const [data, setData] = useState<AtmosphereData | null>(() => {
-    if (!trackName || !artist) return null;
-    return getCached(trackName, artist, locale);
-  });
+  const [data, setData] = useState<AtmosphereData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchAtmosphere = useCallback(async () => {
     if (!trackName || !artist) {
       setData(null);
       return;
     }
+
+    const cached = getCached(trackName, artist, locale);
+    if (cached) {
+      setData(cached);
+      setError(null);
+      return;
+    }
+
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    abortRef.current = new AbortController();
 
     setLoading(true);
     setError(null);
@@ -59,6 +69,7 @@ export function useAtmosphere(trackName: string | null, artist: string | null, l
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trackName, artist, locale }),
+        signal: abortRef.current.signal,
       });
 
       if (!res.ok) {
@@ -70,11 +81,24 @@ export function useAtmosphere(trackName: string | null, artist: string | null, l
       setCached(trackName, artist, locale, result);
       setData(result);
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to generate atmosphere');
     } finally {
       setLoading(false);
     }
   }, [trackName, artist, locale]);
+
+  // Auto-fetch when track changes, with debounce to avoid API spam during rapid skipping
+  useEffect(() => {
+    if (!trackName || !artist) {
+      const raf = requestAnimationFrame(() => setData(null));
+      return () => cancelAnimationFrame(raf);
+    }
+    const timer = setTimeout(() => {
+      fetchAtmosphere();
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [trackName, artist, locale, fetchAtmosphere]);
 
   return { data, loading, error, refetch: fetchAtmosphere };
 }

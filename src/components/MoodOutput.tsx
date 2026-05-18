@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, Loader2, Play, Pause, SkipForward } from 'lucide-react';
+import { Loader2, Play, SkipForward } from 'lucide-react';
 import { useAudioStore } from '@/stores/useAudioStore';
 import { useNeteasePlaylist } from '@/hooks/useNeteasePlaylist';
 import { useAtmosphere } from '@/hooks/useAtmosphere';
@@ -23,16 +23,13 @@ export function MoodOutput() {
     nextTrack,
   } = useNeteasePlaylist();
 
-  const trackId = neteaseTrack?.id ?? null;
-
   const {
     data: atmosphere,
     loading: atmosphereLoading,
     error: atmosphereError,
-    refetch: refetchAtmosphere,
   } = useAtmosphere(neteaseTrack?.name ?? null, neteaseTrack?.artist ?? null, locale);
 
-  const { currentTrack, isPlaying, isLoading: audioLoading, progress, playNetease, pause } =
+  const { currentTrack, isPlaying, isLoading: audioLoading, progress, playNetease } =
     useAudioStore();
 
   // Retry helper: auto-advance on timeout/error
@@ -49,7 +46,6 @@ export function MoodOutput() {
             }
             const n = nextTrack();
             if (n) {
-              // Small delay before retry to avoid UI thrashing and rate limits
               setTimeout(() => {
                 retryPlayRef.current(n);
               }, 300);
@@ -60,24 +56,11 @@ export function MoodOutput() {
     };
   }, [neteaseTrack, playNetease, nextTrack]);
 
-  // Auto-play when track loads
-  useEffect(() => {
-    if (neteaseTrack && !neteaseLoading) {
-      retryPlayRef.current(neteaseTrack);
-    }
-  }, [neteaseTrack, neteaseLoading]);
-
-  // Auto-fetch AI description when track changes
-  useEffect(() => {
-    if (trackId) {
-      refetchAtmosphere();
-    }
-  }, [trackId, refetchAtmosphere]);
-
   // Listen for Orb click play request
   useEffect(() => {
     const handler = () => {
       if (!isPlaying && neteaseTrack) {
+        failCountRef.current = 0;
         retryPlayRef.current(neteaseTrack);
       }
     };
@@ -85,22 +68,22 @@ export function MoodOutput() {
     return () => window.removeEventListener('moodrift:request-play', handler);
   }, [isPlaying, neteaseTrack]);
 
-  const handleTogglePlay = () => {
+  const handleMainAction = () => {
     if (isPlaying) {
-      pause();
+      // Playing → skip to next track and play
+      failCountRef.current = 0;
+      const n = nextTrack();
+      if (n) {
+        retryPlayRef.current(n);
+      }
     } else if (neteaseTrack) {
+      // Not playing → start playing
       failCountRef.current = 0;
       retryPlayRef.current(neteaseTrack);
     }
   };
 
-  const handleNext = () => {
-    failCountRef.current = 0;
-    const n = nextTrack();
-    if (n) {
-      retryPlayRef.current(n);
-    }
-  };
+  const isBusy = neteaseLoading || audioLoading || atmosphereLoading;
 
   return (
     <AnimatePresence mode="wait">
@@ -147,52 +130,27 @@ export function MoodOutput() {
           )}
         </div>
 
-        {/* Playback row */}
+        {/* Single action button */}
         <div className="flex items-center justify-center gap-2">
-          {/* AI Describe button */}
           <button
-            onClick={refetchAtmosphere}
-            disabled={atmosphereLoading || audioLoading || !neteaseTrack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-background/60 backdrop-blur-sm text-[10px] tracking-wider uppercase text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all disabled:opacity-50"
+            onClick={handleMainAction}
+            disabled={isBusy || !neteaseTrack}
+            className="flex items-center gap-2 px-6 py-2 rounded-full bg-primary/90 text-primary-foreground text-xs font-medium hover:bg-primary transition-colors disabled:opacity-50 shadow-lg shadow-primary/20"
           >
-            {atmosphereLoading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <Sparkles className="w-3 h-3" />
-            )}
-            <span>{t('output.curate')}</span>
-          </button>
-
-          {/* Play / Pause */}
-          <button
-            onClick={handleTogglePlay}
-            disabled={neteaseLoading || audioLoading}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/90 text-primary-foreground text-xs font-medium hover:bg-primary transition-colors disabled:opacity-50 shadow-lg shadow-primary/20"
-          >
-            {neteaseLoading || audioLoading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            {isBusy ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : isPlaying ? (
-              <Pause className="w-3.5 h-3.5" />
+              <SkipForward className="w-4 h-4" />
             ) : (
-              <Play className="w-3.5 h-3.5 ml-0.5" />
+              <Play className="w-4 h-4 ml-0.5" />
             )}
             <span>
-              {neteaseLoading || audioLoading
+              {isBusy
                 ? 'Loading...'
                 : isPlaying
-                  ? currentTrack?.name ?? 'Playing'
+                  ? t('output.drift')
                   : 'Play Mood'}
             </span>
-          </button>
-
-          {/* Next track */}
-          <button
-            onClick={handleNext}
-            disabled={neteaseLoading || audioLoading || !neteaseTrack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-background/60 backdrop-blur-sm text-[10px] tracking-wider uppercase text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all disabled:opacity-50"
-          >
-            <SkipForward className="w-3 h-3" />
-            <span>{t('output.next')}</span>
           </button>
         </div>
 
