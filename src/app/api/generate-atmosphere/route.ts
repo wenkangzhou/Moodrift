@@ -47,10 +47,14 @@ Return ONLY the following JSON format, no other text:
         'Authorization': `Bearer ${MOONSHOT_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'moonshot-v1-8k',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.9,
-        max_tokens: 256,
+        model: 'kimi-k2.5',
+        messages: [
+          { role: 'system', content: '你是一位国家级专业跨文化艺术评论家与音乐诗人。' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.6,
+        max_tokens: 4096,
+        thinking: { type: 'disabled' },
       }),
     });
 
