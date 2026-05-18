@@ -1,35 +1,49 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   type NeteaseTrack,
-  type NeteasePlaylist,
   moodPlaylistMap,
-  pickRandomTrack,
 } from '@/lib/netease';
 
-export function useNeteasePlaylist(environment: string) {
-  const [track, setTrack] = useState<NeteaseTrack | null>(null);
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+export function useNeteasePlaylist(environment: string, playlistIds?: number[]) {
+  const [candidates, setCandidates] = useState<NeteaseTrack[]>([]);
+  const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const triedPlaylists = useRef<Set<number>>(new Set());
 
-  const fetchRandom = useCallback(async () => {
-    const playlistIds = moodPlaylistMap[environment];
-    if (!playlistIds || playlistIds.length === 0) {
+  const fetchCandidates = useCallback(async () => {
+    const ids = playlistIds ?? moodPlaylistMap[environment];
+    if (!ids || ids.length === 0) {
       setError('No playlist mapped for this mood');
       return;
     }
 
+    setCandidates([]);
     setLoading(true);
     setError(null);
+    setIndex(0);
+    triedPlaylists.current = new Set();
 
-    // Try each mapped playlist until we find one with tracks
-    for (const pid of playlistIds) {
+    const allTracks: NeteaseTrack[] = [];
+
+    // Fetch every mapped playlist and merge tracks
+    for (const pid of ids) {
       try {
         const res = await fetch(`/api/netease/playlist?id=${pid}`);
         if (!res.ok) continue;
 
         const data = await res.json();
         const tracks: NeteaseTrack[] =
-          data?.result?.tracks?.map((t: any) => ({
+          data?.result?.tracks?.map((t: { id: number; name: string; artists?: { name: string }[]; album?: { picUrl: string }; duration?: number }) => ({
             id: t.id,
             name: t.name,
             artist: t.artists?.[0]?.name ?? 'Unknown',
@@ -37,27 +51,33 @@ export function useNeteasePlaylist(environment: string) {
             duration: Math.round((t.duration ?? 0) / 1000),
           })) ?? [];
 
-        if (tracks.length > 0) {
-          const picked = pickRandomTrack(tracks);
-          if (picked) {
-            setTrack(picked);
-            setLoading(false);
-            return;
-          }
-        }
+        allTracks.push(...tracks);
+        triedPlaylists.current.add(pid);
       } catch {
         // try next playlist
       }
     }
 
+    if (allTracks.length > 0) {
+      setCandidates(shuffle(allTracks));
+    } else {
+      setError('Could not load tracks from Netease');
+      setCandidates([]);
+    }
+
     setLoading(false);
-    setError('Could not load tracks from Netease');
-  }, [environment]);
+  }, [environment, playlistIds]);
 
-  useEffect(() => {
-    setTrack(null);
-    setError(null);
-  }, [environment]);
+  const nextTrack = useCallback(() => {
+    if (index < candidates.length - 1) {
+      setIndex((i) => i + 1);
+      return candidates[index + 1];
+    }
+    return null;
+  }, [candidates, index]);
 
-  return { track, loading, error, refetch: fetchRandom };
+
+  const track = candidates[index] ?? null;
+
+  return { track, candidates, loading, error, refetch: fetchCandidates, nextTrack };
 }

@@ -63,24 +63,7 @@ export function generateMockMood(
     sunset: { zh: '日落', en: 'Sunset' },
   };
 
-  const activityLabels: Record<string, { zh: string; en: string }> = {
-    run: { zh: '奔跑', en: 'Run' },
-    walk: { zh: '漫步', en: 'Walk' },
-    focus: { zh: '专注', en: 'Focus' },
-    work: { zh: '工作', en: 'Work' },
-    drive: { zh: '驾驶', en: 'Drive' },
-  };
-
-  const emotionLabels: Record<string, { zh: string; en: string }> = {
-    lonely: { zh: '孤独', en: 'Lonely' },
-    dreamy: { zh: '梦幻', en: 'Dreamy' },
-    happy: { zh: '愉悦', en: 'Happy' },
-    melancholy: { zh: '忧郁', en: 'Melancholy' },
-  };
-
   const envName = envLabels[environment]?.[locale as 'zh' | 'en'] ?? environment;
-  const actName = activityLabels[activity]?.[locale as 'zh' | 'en'] ?? activity;
-  const emoName = emotionLabels[emotion]?.[locale as 'zh' | 'en'] ?? emotion;
 
   const isHighEnergy = energy > 65;
   const isLowEnergy = energy < 35;

@@ -40,6 +40,8 @@
     "atmosphere": "氛围",
     "bpm": "BPM",
     "recommended": "推荐音乐",
-    "ready": "准备生成氛围"
+    "ready": "准备生成氛围",
+    "curate": "AI 策展",
+    "curating": "策展中..."
   }
 }

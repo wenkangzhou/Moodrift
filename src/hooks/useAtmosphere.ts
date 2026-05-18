@@ -5,6 +5,7 @@ export interface AtmosphereData {
   description: string;
   tags: string[];
   bpm: number;
+  playlistIds?: number[];
 }
 
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -66,13 +67,6 @@ export function useAtmosphere(
   const [error, setError] = useState<string | null>(null);
 
   const fetchAtmosphere = useCallback(async () => {
-    const cached = getCached(energy, environment, activity, emotion, locale);
-    if (cached) {
-      setData(cached);
-      setError(null);
-      return;
-    }
-
     setLoading(true);
     setError(null);
     try {

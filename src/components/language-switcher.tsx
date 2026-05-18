@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAppStore } from '@/stores/useAppStore';
-import { languages } from '@/i18n/config';
 
 export function LanguageSwitcher() {
   const pathname = usePathname();

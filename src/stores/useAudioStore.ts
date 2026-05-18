@@ -20,12 +20,18 @@ export interface UnifiedTrack {
   generativeData?: GenerativeTrack;
 }
 
+interface PlayNeteaseOptions {
+  fallback?: GenerativeTrack;
+  onFail?: () => void;
+  timeoutMs?: number;
+}
+
 interface AudioStore {
   currentTrack: UnifiedTrack | null;
   isPlaying: boolean;
   progress: number;
   isLoading: boolean;
-  playNetease: (track: NeteaseTrack, fallback?: GenerativeTrack) => void;
+  playNetease: (track: NeteaseTrack, options?: PlayNeteaseOptions) => void;
   playGenerative: (track: GenerativeTrack) => void;
   pause: () => void;
 }
@@ -66,7 +72,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     progress: 0,
     isLoading: false,
 
-    playNetease: (track, fallback) => {
+    playNetease: (track, options = {}) => {
       cleanup();
 
       const url = getNeteaseAudioUrl(track.id);
@@ -86,13 +92,30 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       set({ isLoading: true, currentTrack: unified, progress: 0 });
 
       let hasStarted = false;
+      const timeoutMs = options.timeoutMs ?? 8000;
+      const timeout = setTimeout(() => {
+        console.warn('[AudioStore] Netease load timeout, id:', track.id);
+        cleanup();
+        if (options.onFail) {
+          options.onFail();
+        } else if (options.fallback) {
+          get().playGenerative(options.fallback);
+        } else {
+          set({ isLoading: false, isPlaying: false });
+        }
+      }, timeoutMs);
+
+      const clear = () => clearTimeout(timeout);
 
       const onCanPlay = () => {
         audioEl!.play().catch((err) => {
           console.warn('[AudioStore] Netease play failed:', err);
+          clear();
           cleanup();
-          if (fallback) {
-            get().playGenerative(fallback);
+          if (options.onFail) {
+            options.onFail();
+          } else if (options.fallback) {
+            get().playGenerative(options.fallback);
           } else {
             set({ isLoading: false, isPlaying: false });
           }
@@ -101,22 +124,29 @@ export const useAudioStore = create<AudioStore>((set, get) => {
 
       const onPlay = () => {
         hasStarted = true;
+        clear();
         set({ isLoading: false, isPlaying: true, progress: 0 });
         startProgress(track.duration * 1000);
       };
 
       const onEnded = () => {
+        clear();
         cleanup();
         set({ isPlaying: false, progress: 0 });
       };
 
       const onError = () => {
         console.warn('[AudioStore] Netease audio load error, id:', track.id);
+        clear();
         cleanup();
-        if (!hasStarted && fallback) {
-          get().playGenerative(fallback);
-        } else {
-          set({ isLoading: false, isPlaying: false });
+        if (!hasStarted) {
+          if (options.onFail) {
+            options.onFail();
+          } else if (options.fallback) {
+            get().playGenerative(options.fallback);
+          } else {
+            set({ isLoading: false, isPlaying: false });
+          }
         }
       };
 

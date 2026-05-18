@@ -67,7 +67,7 @@ export class GenerativePlayer {
 
     const scale = getScaleSemitones(track.scale);
 
-    track.voices.forEach((voice, vi) => {
+    track.voices.forEach((voice) => {
       const semitone = scale[voice.scaleIndex % scale.length] + voice.octave * 12;
       const freq = noteToFreq(semitone, track.rootFreq);
 

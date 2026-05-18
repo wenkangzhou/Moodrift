@@ -8,10 +8,6 @@ const nextConfig: NextConfig = {
         hostname: 'images.unsplash.com',
       },
       {
-        protocol: 'https',
-        hostname: 'usercontent.jamendo.com',
-      },
-      {
         protocol: 'http',
         hostname: '*.music.126.net',
       },

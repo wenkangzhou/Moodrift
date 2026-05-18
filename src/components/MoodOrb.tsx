@@ -168,14 +168,17 @@ export function MoodOrb() {
   const { isPlaying, pause } = useAudioStore();
 
   useEffect(() => {
-    setMounted(true);
-    try {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (!gl) setWebglFailed(true);
-    } catch {
-      setWebglFailed(true);
-    }
+    const raf = requestAnimationFrame(() => {
+      setMounted(true);
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) setWebglFailed(true);
+      } catch {
+        setWebglFailed(true);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   const handleClick = () => {

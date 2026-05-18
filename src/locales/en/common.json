@@ -40,6 +40,8 @@
     "atmosphere": "Atmosphere",
     "bpm": "BPM",
     "recommended": "Recommended",
-    "ready": "Ready to generate"
+    "ready": "Ready to generate",
+    "curate": "AI Curate",
+    "curating": "Curating..."
   }
 }

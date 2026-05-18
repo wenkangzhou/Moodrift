@@ -10,12 +10,14 @@ import { useNeteasePlaylist } from '@/hooks/useNeteasePlaylist';
 import { useAtmosphere } from '@/hooks/useAtmosphere';
 import { generateMockMood } from '@/lib/moods';
 import { Badge } from '@/components/ui/badge';
+import type { NeteaseTrack } from '@/lib/netease';
 
 export function MoodOutput() {
   const { energy, environment, activity, emotion } = useAppStore();
   const { t, i18n } = useTranslation('common');
   const locale = i18n.language;
   const autoPlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryPlayRef = useRef<(t?: NeteaseTrack) => void>(() => {});
 
   const {
     data: atmosphere,
@@ -33,7 +35,8 @@ export function MoodOutput() {
     track: neteaseTrack,
     loading: neteaseLoading,
     refetch: refetchNetease,
-  } = useNeteasePlaylist(environment);
+    nextTrack,
+  } = useNeteasePlaylist(environment, atmosphere?.playlistIds);
 
   const { currentTrack, isPlaying, progress, playNetease, playGenerative, pause } =
     useAudioStore();
@@ -42,7 +45,30 @@ export function MoodOutput() {
   const description = atmosphere?.description ?? mockMood.description;
   const tags = atmosphere?.tags ?? mockMood.tags;
   const bpm = atmosphere?.bpm ?? mockMood.bpm;
-  const hasAiData = !!atmosphere;
+
+  // Retry helper: auto-advance to next candidate on timeout/error
+  useEffect(() => {
+    retryPlayRef.current = (t?: NeteaseTrack) => {
+      const target = t ?? neteaseTrack;
+      if (target) {
+        playNetease(target, {
+          fallback: mockMood.tracks[0],
+          onFail: () => {
+            const next = nextTrack();
+            if (next) {
+              retryPlayRef.current(next);
+            } else {
+              const track = mockMood.tracks[0];
+              if (track) playGenerative(track);
+            }
+          },
+        });
+      } else {
+        const track = mockMood.tracks[0];
+        if (track) playGenerative(track);
+      }
+    };
+  }, [neteaseTrack, playNetease, playGenerative, nextTrack, mockMood]);
 
   // Auto-play when environment changes (with debounce)
   const triggerAutoPlay = useCallback(() => {
@@ -63,28 +89,30 @@ export function MoodOutput() {
     };
   }, [environment, triggerAutoPlay]);
 
+  // When AI returns new playlistIds, refetch from the curated pool
+  useEffect(() => {
+    if (atmosphere?.playlistIds && atmosphere.playlistIds.length > 0) {
+      refetchNetease();
+    }
+  }, [atmosphere?.playlistIds, refetchNetease]);
+
   // Play netease track when it loads; fallback to generative on failure
   useEffect(() => {
     if (neteaseTrack && !neteaseLoading) {
-      playNetease(neteaseTrack, mockMood.tracks[0]);
+      retryPlayRef.current(neteaseTrack);
     }
-  }, [neteaseTrack, neteaseLoading, playNetease, mockMood]);
+  }, [neteaseTrack, neteaseLoading]);
 
   // Listen for Orb click play request
   useEffect(() => {
     const handler = () => {
       if (!isPlaying) {
-        if (neteaseTrack) {
-          playNetease(neteaseTrack, mockMood.tracks[0]);
-        } else {
-          const track = mockMood.tracks[0];
-          if (track) playGenerative(track);
-        }
+        retryPlayRef.current();
       }
     };
     window.addEventListener('moodrift:request-play', handler);
     return () => window.removeEventListener('moodrift:request-play', handler);
-  }, [isPlaying, neteaseTrack, mockMood, playNetease, playGenerative]);
+  }, [isPlaying]);
 
   // Stop audio when component unmounts or mood params change
   useEffect(() => {
@@ -97,12 +125,7 @@ export function MoodOutput() {
     if (isPlaying) {
       pause();
     } else {
-      if (neteaseTrack) {
-        playNetease(neteaseTrack, mockMood.tracks[0]);
-      } else {
-        const track = mockMood.tracks[0];
-        if (track) playGenerative(track);
-      }
+      retryPlayRef.current();
     }
   };
 
@@ -158,7 +181,7 @@ export function MoodOutput() {
             ) : (
               <Sparkles className="w-3 h-3" />
             )}
-            <span>{hasAiData ? 'Regen' : 'AI'}</span>
+            <span>{atmosphereLoading ? t('output.curating') : t('output.curate')}</span>
           </button>
 
           {/* Play / Pause */}
