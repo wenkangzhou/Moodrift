@@ -12,18 +12,39 @@ function OrbMesh({
   color,
   secondary,
   isPlaying,
+  isLoading,
 }: {
   color: string;
   secondary: string;
   isPlaying: boolean;
+  isLoading: boolean;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const lightRef = useRef<THREE.PointLight>(null);
   const glowRef = useRef<THREE.Mesh>(null);
+  const ringRef = useRef<THREE.Mesh>(null);
 
   useFrame(({ clock }) => {
     if (!meshRef.current) return;
     const t = clock.getElapsedTime();
+
+    if (isLoading) {
+      const pulse = 1 + Math.sin(t * 4) * 0.12;
+      meshRef.current.scale.setScalar(pulse);
+      meshRef.current.rotation.y += 0.015;
+      meshRef.current.rotation.x = Math.sin(t * 3) * 0.08;
+      if (lightRef.current) {
+        lightRef.current.intensity = 3 + Math.sin(t * 6) * 1.5;
+      }
+      if (glowRef.current) {
+        glowRef.current.scale.setScalar(1.15 + Math.sin(t * 4) * 0.15);
+      }
+      if (ringRef.current) {
+        ringRef.current.rotation.z += 0.04;
+        ringRef.current.scale.setScalar(1 + Math.sin(t * 3) * 0.08);
+      }
+      return;
+    }
 
     const basePulse = isPlaying ? 1.5 : 0.5;
     const beatPulse = isPlaying ? Math.PI * 2 : 0;
@@ -39,12 +60,16 @@ function OrbMesh({
     if (lightRef.current) {
       lightRef.current.intensity = isPlaying
         ? 2.5 + Math.sin(t * beatPulse) * 1.2
-        : 2 + Math.sin(t * basePulse * 1.5) * 0.8;
+        : 1.5 + Math.sin(t * basePulse * 1.5) * 0.5;
     }
 
     if (glowRef.current) {
       const glowScale = isPlaying ? 1 + Math.sin(t * beatPulse) * 0.08 : 1;
       glowRef.current.scale.setScalar(glowScale);
+    }
+
+    if (ringRef.current) {
+      ringRef.current.rotation.z += isPlaying ? 0.005 : 0.002;
     }
   });
 
@@ -56,22 +81,23 @@ function OrbMesh({
         <meshPhysicalMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.4}
+          emissiveIntensity={isPlaying ? 0.4 : 0.15}
           roughness={0.35}
           metalness={0.1}
-          clearcoat={1}
+          clearcoat={isPlaying ? 1 : 0.3}
           clearcoatRoughness={0.1}
           transparent
           opacity={0.92}
         />
       </mesh>
       <mesh ref={glowRef}>
-        <sphereGeometry args={[1.45, 32, 32]} />
+        <sphereGeometry args={[1.45, 64, 64]} />
         <meshBasicMaterial
           color={secondary}
           transparent
           opacity={isPlaying ? 0.12 : 0.06}
           side={THREE.BackSide}
+          depthWrite={false}
         />
       </mesh>
       <mesh>
@@ -82,17 +108,23 @@ function OrbMesh({
           opacity={isPlaying ? 0.25 : 0.15}
         />
       </mesh>
-      {isPlaying && (
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
+      {isPlaying && !isLoading && (
+        <mesh rotation={[Math.PI / 2, 0, 0]} ref={ringRef}>
           <torusGeometry args={[1.6, 0.015, 16, 100]} />
           <meshBasicMaterial color={secondary} transparent opacity={0.3} />
+        </mesh>
+      )}
+      {isLoading && (
+        <mesh ref={ringRef}>
+          <torusGeometry args={[1.7, 0.02, 16, 100]} />
+          <meshBasicMaterial color={secondary} transparent opacity={0.5} />
         </mesh>
       )}
     </group>
   );
 }
 
-function Scene() {
+function Scene({ isLoading }: { isLoading: boolean }) {
   const { isPlaying } = useAudioStore();
 
   return (
@@ -103,47 +135,65 @@ function Scene() {
         color={DEFAULT_COLOR}
         secondary={DEFAULT_SECONDARY}
         isPlaying={isPlaying}
+        isLoading={isLoading}
       />
     </>
   );
 }
 
-function FallbackOrb() {
-  const { isPlaying } = useAudioStore();
-
+function FallbackOrb({ isPlaying, isLoading }: { isPlaying: boolean; isLoading: boolean }) {
   return (
     <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center animate-float">
       <div
-        className="absolute inset-0 rounded-full blur-3xl animate-pulse-glow"
+        className="absolute inset-0 rounded-full blur-3xl"
         style={{
-          background: `radial-gradient(circle, ${DEFAULT_COLOR}${isPlaying ? '50' : '30'} 0%, transparent 70%)`,
+          background: `radial-gradient(circle, ${DEFAULT_COLOR}${isLoading ? '70' : isPlaying ? '50' : '30'} 0%, transparent 70%)`,
+          animation: isLoading
+            ? 'pulse-glow 0.6s ease-in-out infinite alternate'
+            : isPlaying
+              ? 'pulse-glow 1.5s ease-in-out infinite alternate'
+              : 'pulse-glow 3s ease-in-out infinite alternate',
         }}
       />
       <div
         className="relative w-48 h-48 md:w-60 md:h-60 rounded-full transition-all duration-700"
         style={{
-          background: `radial-gradient(circle at 35% 35%, ${DEFAULT_COLOR} 0%, ${DEFAULT_SECONDARY}60 50%, ${DEFAULT_COLOR}20 100%)`,
-          boxShadow: `0 0 ${isPlaying ? '80px' : '60px'} ${DEFAULT_COLOR}${isPlaying ? '60' : '40'}, inset 0 0 40px ${DEFAULT_SECONDARY}20`,
+          background: `radial-gradient(circle at 35% 35%, ${DEFAULT_COLOR} 0%, ${DEFAULT_SECONDARY}${isLoading ? 'ff' : isPlaying ? '80' : '60'} 50%, ${DEFAULT_COLOR}20 100%)`,
+          boxShadow: `0 0 ${isLoading ? '100px' : isPlaying ? '80px' : '50px'} ${DEFAULT_COLOR}${isLoading ? '90' : isPlaying ? '60' : '40'}, inset 0 0 40px ${DEFAULT_SECONDARY}20`,
+          transform: isLoading ? 'scale(0.88)' : 'scale(1)',
         }}
       />
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-7 h-7 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
+        </div>
+      )}
     </div>
   );
 }
 
 export function MoodOrb() {
   const [mounted, setMounted] = useState(false);
-  const [webglFailed, setWebglFailed] = useState(false);
-  const { isPlaying, pause } = useAudioStore();
+  const [useFallback, setUseFallback] = useState(false);
+  const { isPlaying, isLoading, pause } = useAudioStore();
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
       setMounted(true);
+      // Force CSS fallback on small screens and touch devices —
+      // WebGL is unreliable on many mobile browsers and high-DPI screens
+      const isSmallScreen = window.innerWidth < 768;
+      const isTouch = navigator.maxTouchPoints > 0;
+      if (isSmallScreen || isTouch) {
+        setUseFallback(true);
+        return;
+      }
       try {
         const canvas = document.createElement('canvas');
         const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (!gl) setWebglFailed(true);
+        if (!gl) setUseFallback(true);
       } catch {
-        setWebglFailed(true);
+        setUseFallback(true);
       }
     });
     return () => cancelAnimationFrame(raf);
@@ -157,13 +207,21 @@ export function MoodOrb() {
     }
   };
 
-  if (!mounted || webglFailed) {
+  if (!mounted) {
+    return (
+      <div className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center">
+        <div className="w-48 h-48 md:w-60 md:h-60 rounded-full bg-primary/30 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (useFallback) {
     return (
       <div
         className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center cursor-pointer"
         onClick={handleClick}
       >
-        <FallbackOrb />
+        <FallbackOrb isPlaying={isPlaying} isLoading={isLoading} />
       </div>
     );
   }
@@ -174,10 +232,10 @@ export function MoodOrb() {
         camera={{ position: [0, 0, 4], fov: 45 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
-        onError={() => setWebglFailed(true)}
+        onError={() => setUseFallback(true)}
       >
         <Suspense fallback={null}>
-          <Scene />
+          <Scene isLoading={isLoading} />
         </Suspense>
       </Canvas>
     </div>
