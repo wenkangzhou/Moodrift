@@ -29,7 +29,7 @@ export function MoodOutput() {
     error: atmosphereError,
   } = useAtmosphere(neteaseTrack?.name ?? null, neteaseTrack?.artist ?? null, locale);
 
-  const { currentTrack, isPlaying, isLoading: audioLoading, progress, playNetease } =
+  const { currentTrack, isPlaying, isLoading: audioLoading, progress, playNetease, pause } =
     useAudioStore();
 
   // Retry helper: auto-advance on timeout/error
@@ -83,6 +83,15 @@ export function MoodOutput() {
     }
   };
 
+  const handleContainerClick = () => {
+    if (isPlaying) {
+      pause();
+    } else if (neteaseTrack) {
+      failCountRef.current = 0;
+      retryPlayRef.current(neteaseTrack);
+    }
+  };
+
   const isBusy = neteaseLoading || audioLoading || atmosphereLoading;
 
   return (
@@ -93,7 +102,8 @@ export function MoodOutput() {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -6 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="text-center"
+        className="text-center cursor-pointer"
+        onClick={handleContainerClick}
       >
         {/* Title + Description */}
         <h2 className="text-xl md:text-2xl font-medium tracking-tight text-foreground mb-1">
@@ -133,7 +143,10 @@ export function MoodOutput() {
         {/* Single action button */}
         <div className="flex items-center justify-center gap-2">
           <button
-            onClick={handleMainAction}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleMainAction();
+            }}
             disabled={isBusy || !neteaseTrack}
             className="flex items-center gap-2 px-6 py-2 rounded-full bg-primary/90 text-primary-foreground text-xs font-medium hover:bg-primary transition-colors disabled:opacity-50 shadow-lg shadow-primary/20"
           >

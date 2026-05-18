@@ -27,19 +27,25 @@ function shuffle<T>(arr: T[]): T[] {
 // All preset playlist IDs merged into one pool
 const allPlaylistIds = Object.values(moodPlaylistMap).flat();
 
+// Module-level guard to prevent Strict Mode double-invocation from refetching twice
+let autoFetchInitiated = false;
+
 export function useNeteasePlaylist() {
   const [candidates, setCandidates] = useState<NeteaseTrack[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const triedPlaylists = useRef<Set<number>>(new Set());
-  const hasInitiated = useRef(false);
 
   const fetchCandidates = useCallback(async (): Promise<NeteaseTrack[]> => {
-    setCandidates([]);
+    const isFirstLoad = candidates.length === 0;
+
     setLoading(true);
     setError(null);
-    setIndex(0);
+    if (isFirstLoad) {
+      setCandidates([]);
+      setIndex(0);
+    }
     triedPlaylists.current = new Set();
 
     const allTracks: NeteaseTrack[] = [];
@@ -82,19 +88,25 @@ export function useNeteasePlaylist() {
       console.log('[useNeteasePlaylist] Loaded', uniqueTracks.length, 'tracks from', triedPlaylists.current.size, 'playlists');
     } else {
       setError('Could not load tracks from Netease');
-      setCandidates([]);
+      if (isFirstLoad) {
+        setCandidates([]);
+      }
       console.warn('[useNeteasePlaylist] No tracks loaded, tried', triedPlaylists.current.size, 'playlists');
+    }
+
+    if (isFirstLoad) {
+      setIndex(0);
     }
 
     setLoading(false);
     return uniqueTracks;
-  }, []);
+  }, [candidates.length]);
 
   // Auto-fetch on mount when pool is empty
   useEffect(() => {
-    if (hasInitiated.current) return;
+    if (autoFetchInitiated) return;
     if (candidates.length === 0 && !loading && !error) {
-      hasInitiated.current = true;
+      autoFetchInitiated = true;
       const raf = requestAnimationFrame(() => {
         fetchCandidates();
       });
