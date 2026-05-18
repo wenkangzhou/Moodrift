@@ -14,6 +14,7 @@ export function MoodOutput() {
   const { t, i18n } = useTranslation('common');
   const locale = i18n.language;
   const retryPlayRef = useRef<(t?: NeteaseTrack) => void>(() => {});
+  const failCountRef = useRef(0);
 
   const {
     track: neteaseTrack,
@@ -39,8 +40,14 @@ export function MoodOutput() {
     retryPlayRef.current = (t?: NeteaseTrack) => {
       const target = t ?? neteaseTrack;
       if (target) {
+        failCountRef.current = 0;
         playNetease(target, {
           onFail: () => {
+            failCountRef.current += 1;
+            if (failCountRef.current > 10) {
+              console.warn('[MoodOutput] Too many consecutive play failures, stopping retry');
+              return;
+            }
             const n = nextTrack();
             if (n) {
               retryPlayRef.current(n);
@@ -68,13 +75,13 @@ export function MoodOutput() {
   // Listen for Orb click play request
   useEffect(() => {
     const handler = () => {
-      if (!isPlaying) {
-        retryPlayRef.current();
+      if (!isPlaying && neteaseTrack) {
+        retryPlayRef.current(neteaseTrack);
       }
     };
     window.addEventListener('moodrift:request-play', handler);
     return () => window.removeEventListener('moodrift:request-play', handler);
-  }, [isPlaying]);
+  }, [isPlaying, neteaseTrack]);
 
   const handleTogglePlay = () => {
     if (isPlaying) {

@@ -102,10 +102,13 @@ export function useNeteasePlaylist() {
 
   const nextTrack = useCallback(() => {
     if (candidates.length === 0) return null;
-    const nextIndex = index < candidates.length - 1 ? index + 1 : 0;
-    setIndex(nextIndex);
-    return candidates[nextIndex];
-  }, [candidates, index]);
+    let resolvedIndex = 0;
+    setIndex((prev) => {
+      resolvedIndex = prev < candidates.length - 1 ? prev + 1 : 0;
+      return resolvedIndex;
+    });
+    return candidates[resolvedIndex] ?? null;
+  }, [candidates]);
 
   const track = candidates[index] ?? null;
 
