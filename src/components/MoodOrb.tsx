@@ -157,17 +157,12 @@ export function MoodOrb() {
     }
   };
 
-  if (!mounted) {
+  if (!mounted || webglFailed) {
     return (
-      <div className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center">
-        <div className="w-48 h-48 md:w-60 md:h-60 rounded-full bg-muted/20 animate-pulse" />
-      </div>
-    );
-  }
-
-  if (webglFailed) {
-    return (
-      <div onClick={handleClick} className="cursor-pointer">
+      <div
+        className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center cursor-pointer"
+        onClick={handleClick}
+      >
         <FallbackOrb />
       </div>
     );
@@ -177,6 +172,7 @@ export function MoodOrb() {
     <div className="w-full h-[32vh] md:h-[38vh] relative cursor-pointer" onClick={handleClick}>
       <Canvas
         camera={{ position: [0, 0, 4], fov: 45 }}
+        dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
         onError={() => setWebglFailed(true)}
       >
