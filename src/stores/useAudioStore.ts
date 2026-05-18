@@ -31,7 +31,7 @@ interface AudioStore {
   isPlaying: boolean;
   progress: number;
   isLoading: boolean;
-  playNetease: (track: NeteaseTrack, options?: PlayNeteaseOptions) => void;
+  playNetease: (track: NeteaseTrack, options?: PlayNeteaseOptions) => Promise<void>;
   playGenerative: (track: GenerativeTrack) => void;
   pause: () => void;
 }
@@ -72,7 +72,24 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     progress: 0,
     isLoading: false,
 
-    playNetease: (track, options = {}) => {
+    playNetease: async (track, options = {}) => {
+      // Quick availability check before attempting playback
+      try {
+        const checkRes = await fetch(`/api/netease/check?id=${track.id}`);
+        const checkData = await checkRes.json();
+        if (!checkData.available) {
+          console.warn('[AudioStore] Track unavailable, id:', track.id);
+          if (options.onFail) {
+            options.onFail();
+          } else if (options.fallback) {
+            get().playGenerative(options.fallback);
+          }
+          return;
+        }
+      } catch {
+        // If check endpoint fails, proceed anyway
+      }
+
       cleanup();
 
       const url = getNeteaseAudioUrl(track.id);

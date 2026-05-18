@@ -4,6 +4,17 @@ import {
   moodPlaylistMap,
 } from '@/lib/netease';
 
+interface RawNeteaseTrack {
+  id: number;
+  name: string;
+  artists?: { name: string }[];
+  ar?: { name: string }[];
+  album?: { picUrl: string };
+  al?: { picUrl: string };
+  duration?: number;
+  dt?: number;
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -41,14 +52,14 @@ export function useNeteasePlaylist() {
         if (!res.ok) continue;
 
         const data = await res.json();
-        const tracks: NeteaseTrack[] =
-          data?.result?.tracks?.map((t: { id: number; name: string; artists?: { name: string }[]; album?: { picUrl: string }; duration?: number }) => ({
-            id: t.id,
-            name: t.name,
-            artist: t.artists?.[0]?.name ?? 'Unknown',
-            cover: t.album?.picUrl ?? '',
-            duration: Math.round((t.duration ?? 0) / 1000),
-          })) ?? [];
+        const rawTracks = data?.result?.tracks ?? data?.playlist?.tracks ?? [];
+        const tracks: NeteaseTrack[] = (rawTracks as RawNeteaseTrack[]).map((t) => ({
+          id: t.id,
+          name: t.name,
+          artist: t.artists?.[0]?.name ?? t.ar?.[0]?.name ?? 'Unknown',
+          cover: t.album?.picUrl ?? t.al?.picUrl ?? '',
+          duration: Math.round((t.duration ?? t.dt ?? 0) / 1000),
+        }));
 
         allTracks.push(...tracks);
         triedPlaylists.current.add(pid);
@@ -57,8 +68,16 @@ export function useNeteasePlaylist() {
       }
     }
 
-    if (allTracks.length > 0) {
-      setCandidates(shuffle(allTracks));
+    // Deduplicate by track id since official toplists and mood playlists overlap
+    const seen = new Set<number>();
+    const uniqueTracks = allTracks.filter((t) => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+
+    if (uniqueTracks.length > 0) {
+      setCandidates(shuffle(uniqueTracks));
     } else {
       setError('Could not load tracks from Netease');
       setCandidates([]);
