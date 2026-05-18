@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { MoodBackground } from '@/components/MoodBackground';
 import { BackgroundFlow } from '@/components/BackgroundFlow';
 import { MoodOrb } from '@/components/MoodOrb';
-import { MoodControls } from '@/components/MoodControls';
 import { MoodOutput } from '@/components/MoodOutput';
 
 export default function HomePage() {
@@ -18,7 +17,7 @@ export default function HomePage() {
       <BackgroundFlow />
 
       {/* Content — single screen, centered, compact */}
-      <div className="relative z-10 h-full flex flex-col items-center justify-center px-4 py-4 gap-2 md:gap-3">
+      <div className="relative z-10 h-full flex flex-col items-center justify-center px-4 py-4 gap-3 md:gap-4">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -56,11 +55,6 @@ export default function HomePage() {
         {/* Output — title, tags, playback status */}
         <div className="w-full max-w-md shrink-0">
           <MoodOutput />
-        </div>
-
-        {/* Controls */}
-        <div className="w-full max-w-md shrink-0">
-          <MoodControls />
         </div>
       </div>
     </main>

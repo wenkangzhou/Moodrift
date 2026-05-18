@@ -41,7 +41,8 @@
     "bpm": "BPM",
     "recommended": "Recommended",
     "ready": "Ready to generate",
-    "curate": "AI Curate",
-    "curating": "Curating..."
+    "curate": "AI Describe",
+    "curating": "Describing...",
+    "next": "Next"
   }
 }

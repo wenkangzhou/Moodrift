@@ -4,29 +4,21 @@ export interface AtmosphereData {
   title: string;
   description: string;
   tags: string[];
-  bpm: number;
-  playlistIds?: number[];
 }
 
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-function cacheKey(energy: number, environment: string, activity: string, emotion: string, locale: string) {
-  return `moodrift-atmosphere-${energy}-${environment}-${activity}-${emotion}-${locale}`;
+function cacheKey(trackName: string, artist: string, locale: string) {
+  return `moodrift-track-${trackName}-${artist}-${locale}`;
 }
 
-function getCached(
-  energy: number,
-  environment: string,
-  activity: string,
-  emotion: string,
-  locale: string
-): AtmosphereData | null {
+function getCached(trackName: string, artist: string, locale: string): AtmosphereData | null {
   try {
-    const raw = localStorage.getItem(cacheKey(energy, environment, activity, emotion, locale));
+    const raw = localStorage.getItem(cacheKey(trackName, artist, locale));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Date.now() - parsed.timestamp > CACHE_TTL) {
-      localStorage.removeItem(cacheKey(energy, environment, activity, emotion, locale));
+      localStorage.removeItem(cacheKey(trackName, artist, locale));
       return null;
     }
     return parsed.data;
@@ -35,17 +27,10 @@ function getCached(
   }
 }
 
-function setCached(
-  energy: number,
-  environment: string,
-  activity: string,
-  emotion: string,
-  locale: string,
-  data: AtmosphereData
-) {
+function setCached(trackName: string, artist: string, locale: string, data: AtmosphereData) {
   try {
     localStorage.setItem(
-      cacheKey(energy, environment, activity, emotion, locale),
+      cacheKey(trackName, artist, locale),
       JSON.stringify({ data, timestamp: Date.now() })
     );
   } catch {
@@ -53,27 +38,27 @@ function setCached(
   }
 }
 
-export function useAtmosphere(
-  energy: number,
-  environment: string,
-  activity: string,
-  emotion: string,
-  locale: string
-) {
-  const [data, setData] = useState<AtmosphereData | null>(() =>
-    getCached(energy, environment, activity, emotion, locale)
-  );
+export function useAtmosphere(trackName: string | null, artist: string | null, locale: string) {
+  const [data, setData] = useState<AtmosphereData | null>(() => {
+    if (!trackName || !artist) return null;
+    return getCached(trackName, artist, locale);
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchAtmosphere = useCallback(async () => {
+    if (!trackName || !artist) {
+      setData(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const res = await fetch('/api/generate-atmosphere', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ energy, environment, activity, emotion, locale }),
+        body: JSON.stringify({ trackName, artist, locale }),
       });
 
       if (!res.ok) {
@@ -82,14 +67,14 @@ export function useAtmosphere(
       }
 
       const result = await res.json();
-      setCached(energy, environment, activity, emotion, locale, result);
+      setCached(trackName, artist, locale, result);
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate atmosphere');
     } finally {
       setLoading(false);
     }
-  }, [energy, environment, activity, emotion, locale]);
+  }, [trackName, artist, locale]);
 
   return { data, loading, error, refetch: fetchAtmosphere };
 }

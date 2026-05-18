@@ -41,7 +41,8 @@
     "bpm": "BPM",
     "recommended": "推荐音乐",
     "ready": "准备生成氛围",
-    "curate": "AI 策展",
-    "curating": "策展中..."
+    "curate": "AI 解读",
+    "curating": "解读中...",
+    "next": "下一首"
   }
 }

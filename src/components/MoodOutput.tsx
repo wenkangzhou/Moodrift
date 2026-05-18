@@ -1,107 +1,68 @@
 'use client';
 
-import { useMemo, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, Loader2, Play, Pause } from 'lucide-react';
-import { useAppStore } from '@/stores/useAppStore';
+import { Sparkles, Loader2, Play, Pause, SkipForward } from 'lucide-react';
 import { useAudioStore } from '@/stores/useAudioStore';
 import { useNeteasePlaylist } from '@/hooks/useNeteasePlaylist';
 import { useAtmosphere } from '@/hooks/useAtmosphere';
-import { generateMockMood } from '@/lib/moods';
 import { Badge } from '@/components/ui/badge';
 import type { NeteaseTrack } from '@/lib/netease';
 
 export function MoodOutput() {
-  const { energy, environment, activity, emotion } = useAppStore();
   const { t, i18n } = useTranslation('common');
   const locale = i18n.language;
-  const autoPlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryPlayRef = useRef<(t?: NeteaseTrack) => void>(() => {});
+
+  const {
+    track: neteaseTrack,
+    loading: neteaseLoading,
+    nextTrack,
+  } = useNeteasePlaylist();
+
+  const trackId = neteaseTrack?.id ?? null;
 
   const {
     data: atmosphere,
     loading: atmosphereLoading,
     error: atmosphereError,
     refetch: refetchAtmosphere,
-  } = useAtmosphere(energy, environment, activity, emotion, locale);
+  } = useAtmosphere(neteaseTrack?.name ?? null, neteaseTrack?.artist ?? null, locale);
 
-  const mockMood = useMemo(
-    () => generateMockMood(energy, environment, activity, emotion, locale),
-    [energy, environment, activity, emotion, locale]
-  );
-
-  const {
-    track: neteaseTrack,
-    loading: neteaseLoading,
-    refetch: refetchNetease,
-    nextTrack,
-  } = useNeteasePlaylist(environment, atmosphere?.playlistIds);
-
-  const { currentTrack, isPlaying, progress, playNetease, playGenerative, pause } =
+  const { currentTrack, isPlaying, progress, playNetease, pause } =
     useAudioStore();
 
-  const title = atmosphere?.title ?? mockMood.title;
-  const description = atmosphere?.description ?? mockMood.description;
-  const tags = atmosphere?.tags ?? mockMood.tags;
-  const bpm = atmosphere?.bpm ?? mockMood.bpm;
-
-  // Retry helper: auto-advance to next candidate on timeout/error
+  // Retry helper: auto-advance on timeout/error
   useEffect(() => {
     retryPlayRef.current = (t?: NeteaseTrack) => {
       const target = t ?? neteaseTrack;
       if (target) {
         playNetease(target, {
-          fallback: mockMood.tracks[0],
           onFail: () => {
-            const next = nextTrack();
-            if (next) {
-              retryPlayRef.current(next);
-            } else {
-              const track = mockMood.tracks[0];
-              if (track) playGenerative(track);
+            const n = nextTrack();
+            if (n) {
+              retryPlayRef.current(n);
             }
           },
         });
-      } else {
-        const track = mockMood.tracks[0];
-        if (track) playGenerative(track);
       }
     };
-  }, [neteaseTrack, playNetease, playGenerative, nextTrack, mockMood]);
+  }, [neteaseTrack, playNetease, nextTrack]);
 
-  // Auto-play when environment changes (with debounce)
-  const triggerAutoPlay = useCallback(() => {
-    if (autoPlayTimer.current) {
-      clearTimeout(autoPlayTimer.current);
-    }
-    autoPlayTimer.current = setTimeout(() => {
-      refetchNetease();
-    }, 500);
-  }, [refetchNetease]);
-
-  useEffect(() => {
-    triggerAutoPlay();
-    return () => {
-      if (autoPlayTimer.current) {
-        clearTimeout(autoPlayTimer.current);
-      }
-    };
-  }, [environment, triggerAutoPlay]);
-
-  // When AI returns new playlistIds, refetch from the curated pool
-  useEffect(() => {
-    if (atmosphere?.playlistIds && atmosphere.playlistIds.length > 0) {
-      refetchNetease();
-    }
-  }, [atmosphere?.playlistIds, refetchNetease]);
-
-  // Play netease track when it loads; fallback to generative on failure
+  // Auto-play when track loads
   useEffect(() => {
     if (neteaseTrack && !neteaseLoading) {
       retryPlayRef.current(neteaseTrack);
     }
   }, [neteaseTrack, neteaseLoading]);
+
+  // Auto-fetch AI description when track changes
+  useEffect(() => {
+    if (trackId) {
+      refetchAtmosphere();
+    }
+  }, [trackId, refetchAtmosphere]);
 
   // Listen for Orb click play request
   useEffect(() => {
@@ -114,13 +75,6 @@ export function MoodOutput() {
     return () => window.removeEventListener('moodrift:request-play', handler);
   }, [isPlaying]);
 
-  // Stop audio when component unmounts or mood params change
-  useEffect(() => {
-    return () => {
-      useAudioStore.getState().pause();
-    };
-  }, [energy, environment, activity, emotion]);
-
   const handleTogglePlay = () => {
     if (isPlaying) {
       pause();
@@ -129,10 +83,17 @@ export function MoodOutput() {
     }
   };
 
+  const handleNext = () => {
+    const n = nextTrack();
+    if (n) {
+      retryPlayRef.current(n);
+    }
+  };
+
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key={`${energy}-${environment}-${activity}-${emotion}-${locale}-${atmosphere?.title}`}
+        key={neteaseTrack?.id ?? 'empty'}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -6 }}
@@ -141,23 +102,20 @@ export function MoodOutput() {
       >
         {/* Title + Description */}
         <h2 className="text-xl md:text-2xl font-medium tracking-tight text-foreground mb-1">
-          {title}
+          {atmosphere?.title ?? neteaseTrack?.name ?? t('output.ready')}
         </h2>
         <p className="text-xs md:text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto mb-2">
-          {description}
+          {atmosphere?.description ?? neteaseTrack?.artist ?? ''}
         </p>
         {atmosphereError && (
           <p className="text-[9px] text-muted-foreground/40 mb-1">
-            AI offline · using local preset
+            AI offline
           </p>
         )}
 
         {/* Tags */}
         <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
-          <Badge variant="secondary" className="px-2 py-0.5 text-[10px] tracking-wide">
-            {bpm} {t('output.bpm')}
-          </Badge>
-          {tags.map((tag) => (
+          {atmosphere?.tags.map((tag) => (
             <Badge
               key={tag}
               variant="outline"
@@ -165,15 +123,19 @@ export function MoodOutput() {
             >
               {tag}
             </Badge>
-          ))}
+          )) ?? (
+            <Badge variant="secondary" className="px-2 py-0.5 text-[10px] tracking-wide">
+              {neteaseTrack?.artist ?? '...'}
+            </Badge>
+          )}
         </div>
 
         {/* Playback row */}
         <div className="flex items-center justify-center gap-2">
-          {/* AI Generate button */}
+          {/* AI Describe button */}
           <button
             onClick={refetchAtmosphere}
-            disabled={atmosphereLoading}
+            disabled={atmosphereLoading || !neteaseTrack}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-background/60 backdrop-blur-sm text-[10px] tracking-wider uppercase text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all disabled:opacity-50"
           >
             {atmosphereLoading ? (
@@ -181,7 +143,7 @@ export function MoodOutput() {
             ) : (
               <Sparkles className="w-3 h-3" />
             )}
-            <span>{atmosphereLoading ? t('output.curating') : t('output.curate')}</span>
+            <span>{t('output.curate')}</span>
           </button>
 
           {/* Play / Pause */}
@@ -204,6 +166,16 @@ export function MoodOutput() {
                   ? currentTrack?.name ?? 'Playing'
                   : 'Play Mood'}
             </span>
+          </button>
+
+          {/* Next track */}
+          <button
+            onClick={handleNext}
+            disabled={neteaseLoading || !neteaseTrack}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-background/60 backdrop-blur-sm text-[10px] tracking-wider uppercase text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all disabled:opacity-50"
+          >
+            <SkipForward className="w-3 h-3" />
+            <span>{t('output.next')}</span>
           </button>
         </div>
 

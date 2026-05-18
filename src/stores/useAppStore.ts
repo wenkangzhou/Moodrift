@@ -16,6 +16,7 @@ interface AppState {
   setActivity: (v: Activity) => void;
   setEmotion: (v: Emotion) => void;
   setLocale: (v: string) => void;
+  setMood: (params: Partial<Pick<AppState, 'energy' | 'environment' | 'activity' | 'emotion'>>) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -31,6 +32,7 @@ export const useAppStore = create<AppState>()(
       setActivity: (v) => set({ activity: v }),
       setEmotion: (v) => set({ emotion: v }),
       setLocale: (v) => set({ locale: v }),
+      setMood: (params) => set(params),
     }),
     { name: 'moodrift-storage' }
   )

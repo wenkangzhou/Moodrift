@@ -13,7 +13,10 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-export function useNeteasePlaylist(environment: string, playlistIds?: number[]) {
+// All preset playlist IDs merged into one pool
+const allPlaylistIds = Object.values(moodPlaylistMap).flat();
+
+export function useNeteasePlaylist() {
   const [candidates, setCandidates] = useState<NeteaseTrack[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -21,12 +24,6 @@ export function useNeteasePlaylist(environment: string, playlistIds?: number[]) 
   const triedPlaylists = useRef<Set<number>>(new Set());
 
   const fetchCandidates = useCallback(async () => {
-    const ids = playlistIds ?? moodPlaylistMap[environment];
-    if (!ids || ids.length === 0) {
-      setError('No playlist mapped for this mood');
-      return;
-    }
-
     setCandidates([]);
     setLoading(true);
     setError(null);
@@ -35,8 +32,10 @@ export function useNeteasePlaylist(environment: string, playlistIds?: number[]) 
 
     const allTracks: NeteaseTrack[] = [];
 
-    // Fetch every mapped playlist and merge tracks
-    for (const pid of ids) {
+    // Shuffle playlist order so we don't always hit the same ones first
+    const shuffledIds = shuffle(allPlaylistIds);
+
+    for (const pid of shuffledIds) {
       try {
         const res = await fetch(`/api/netease/playlist?id=${pid}`);
         if (!res.ok) continue;
@@ -66,7 +65,7 @@ export function useNeteasePlaylist(environment: string, playlistIds?: number[]) 
     }
 
     setLoading(false);
-  }, [environment, playlistIds]);
+  }, []);
 
   const nextTrack = useCallback(() => {
     if (index < candidates.length - 1) {
@@ -75,7 +74,6 @@ export function useNeteasePlaylist(environment: string, playlistIds?: number[]) 
     }
     return null;
   }, [candidates, index]);
-
 
   const track = candidates[index] ?? null;
 

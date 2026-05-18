@@ -1,12 +1,10 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
-import { useAppStore } from '@/stores/useAppStore';
 import { useAudioStore } from '@/stores/useAudioStore';
 
 export function BackgroundFlow() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { energy, environment } = useAppStore();
   const { isPlaying } = useAudioStore();
 
   useEffect(() => {
@@ -35,8 +33,8 @@ export function BackgroundFlow() {
       sunset: ['#F9A8D420', '#A78BFA20', '#F472B615'],
     };
 
-    const palette = palettes[environment] ?? palettes.night;
-    const particleCount = Math.floor(40 + (energy / 100) * 50);
+    const palette = palettes.night;
+    const particleCount = 65;
 
     interface Particle {
       x: number;
@@ -141,7 +139,7 @@ export function BackgroundFlow() {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
     };
-  }, [energy, environment, isPlaying]);
+  }, [isPlaying]);
 
   return (
     <canvas
