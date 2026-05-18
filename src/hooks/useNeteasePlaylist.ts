@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   type NeteaseTrack,
   moodPlaylistMap,
@@ -33,8 +33,9 @@ export function useNeteasePlaylist() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const triedPlaylists = useRef<Set<number>>(new Set());
+  const hasInitiated = useRef(false);
 
-  const fetchCandidates = useCallback(async () => {
+  const fetchCandidates = useCallback(async (): Promise<NeteaseTrack[]> => {
     setCandidates([]);
     setLoading(true);
     setError(null);
@@ -84,14 +85,26 @@ export function useNeteasePlaylist() {
     }
 
     setLoading(false);
+    return uniqueTracks;
   }, []);
 
-  const nextTrack = useCallback(() => {
-    if (index < candidates.length - 1) {
-      setIndex((i) => i + 1);
-      return candidates[index + 1];
+  // Auto-fetch on mount when pool is empty
+  useEffect(() => {
+    if (hasInitiated.current) return;
+    if (candidates.length === 0 && !loading && !error) {
+      hasInitiated.current = true;
+      const raf = requestAnimationFrame(() => {
+        fetchCandidates();
+      });
+      return () => cancelAnimationFrame(raf);
     }
-    return null;
+  }, [candidates.length, loading, error, fetchCandidates]);
+
+  const nextTrack = useCallback(() => {
+    if (candidates.length === 0) return null;
+    const nextIndex = index < candidates.length - 1 ? index + 1 : 0;
+    setIndex(nextIndex);
+    return candidates[nextIndex];
   }, [candidates, index]);
 
   const track = candidates[index] ?? null;

@@ -18,6 +18,7 @@ export function MoodOutput() {
   const {
     track: neteaseTrack,
     loading: neteaseLoading,
+    error: neteaseError,
     nextTrack,
   } = useNeteasePlaylist();
 
@@ -107,6 +108,11 @@ export function MoodOutput() {
         <p className="text-xs md:text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto mb-2">
           {atmosphere?.description ?? neteaseTrack?.artist ?? ''}
         </p>
+        {neteaseError && (
+          <p className="text-xs text-destructive mb-1">
+            {neteaseError}
+          </p>
+        )}
         {atmosphereError && (
           <p className="text-[9px] text-muted-foreground/40 mb-1">
             AI offline

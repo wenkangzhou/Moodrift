@@ -1,6 +1,6 @@
 {
   "appName": "Moodrift",
-  "appTagline": "Not a music player. A space for your current mood.",
+  "appTagline": "Shuffle music. AI reads the mood of each track.",
   "loading": "Loading...",
   "switchLang": "中",
   "theme": {
@@ -40,7 +40,7 @@
     "atmosphere": "Atmosphere",
     "bpm": "BPM",
     "recommended": "Recommended",
-    "ready": "Ready to generate",
+    "ready": "Picking music…",
     "curate": "AI Describe",
     "curating": "Describing...",
     "next": "Next"
