@@ -27,29 +27,27 @@ function shuffle<T>(arr: T[]): T[] {
 // All preset playlist IDs merged into one pool
 const allPlaylistIds = Object.values(moodPlaylistMap).flat();
 
-// Module-level guard to prevent Strict Mode double-invocation from refetching twice
-let autoFetchInitiated = false;
-
-export function useNeteasePlaylist() {
+export function useNeteasePlaylist(playlistIds?: number[]) {
   const [candidates, setCandidates] = useState<NeteaseTrack[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const triedPlaylists = useRef<Set<number>>(new Set());
+  const autoFetchRef = useRef(false);
+  const prevPlaylistKeyRef = useRef<string>('');
+
+  const playlistIdsKey = playlistIds?.join(',') ?? '';
 
   const fetchCandidates = useCallback(async (): Promise<NeteaseTrack[]> => {
     const isFirstLoad = candidates.length === 0;
 
     setLoading(true);
     setError(null);
-    if (isFirstLoad) {
-      setCandidates([]);
-      setIndex(0);
-    }
     triedPlaylists.current = new Set();
 
-    // Shuffle and take top 5 — parallel fetch keeps first-load under ~1s
-    const shuffledIds = shuffle(allPlaylistIds).slice(0, 5);
+    // Use AI-curated playlists if provided, otherwise fallback to random pool
+    const targetPool = playlistIds && playlistIds.length > 0 ? playlistIds : allPlaylistIds;
+    const shuffledIds = shuffle(targetPool).slice(0, 5);
 
     const responses = await Promise.allSettled(
       shuffledIds.map(async (pid) => {
@@ -89,34 +87,42 @@ export function useNeteasePlaylist() {
 
     if (uniqueTracks.length > 0) {
       setCandidates(shuffle(uniqueTracks));
+      setIndex(0);
       console.log('[useNeteasePlaylist] Loaded', uniqueTracks.length, 'tracks from', triedPlaylists.current.size, 'playlists');
     } else {
       setError('Could not load tracks from Netease');
       if (isFirstLoad) {
         setCandidates([]);
+        setIndex(0);
       }
       console.warn('[useNeteasePlaylist] No tracks loaded, tried', triedPlaylists.current.size, 'playlists');
     }
 
-    if (isFirstLoad) {
-      setIndex(0);
-    }
-
     setLoading(false);
     return uniqueTracks;
-  }, [candidates.length]);
+  }, [candidates.length, playlistIds]);
 
   // Auto-fetch on mount when pool is empty
   useEffect(() => {
-    if (autoFetchInitiated) return;
+    if (autoFetchRef.current) return;
     if (candidates.length === 0 && !loading && !error) {
-      autoFetchInitiated = true;
+      autoFetchRef.current = true;
       const raf = requestAnimationFrame(() => {
         fetchCandidates();
       });
       return () => cancelAnimationFrame(raf);
     }
   }, [candidates.length, loading, error, fetchCandidates]);
+
+  // Refetch when AI-curated playlistIds change
+  useEffect(() => {
+    if (!playlistIdsKey || playlistIdsKey === prevPlaylistKeyRef.current || loading) return;
+    prevPlaylistKeyRef.current = playlistIdsKey;
+    const raf = requestAnimationFrame(() => {
+      fetchCandidates();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [playlistIdsKey, fetchCandidates, loading]);
 
   const nextTrack = useCallback((): NeteaseTrack | null => {
     if (candidates.length === 0) return null;

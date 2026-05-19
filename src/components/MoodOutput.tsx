@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Play, SkipForward, Music } from 'lucide-react';
+import { Loader2, Play, SkipForward, Music, Sparkles } from 'lucide-react';
 import { useAudioStore } from '@/stores/useAudioStore';
 import { useNeteasePlaylist } from '@/hooks/useNeteasePlaylist';
 import { useAtmosphere } from '@/hooks/useAtmosphere';
+import { useCurate } from '@/hooks/useCurate';
 import { Badge } from '@/components/ui/badge';
 import type { NeteaseTrack } from '@/lib/netease';
+import { applyAtmosphereColors } from '@/lib/atmosphere-colors';
+import { useAtmosphereColorStore } from '@/stores/useAtmosphereColorStore';
 
 const DISPLAY_TIMEOUT_MS = 7000;
 
@@ -18,12 +21,14 @@ export function MoodOutput() {
   const retryPlayRef = useRef<(t?: NeteaseTrack) => void>(() => {});
   const failCountRef = useRef(0);
 
+  const { data: curateData, loading: curateLoading, error: curateError, curate } = useCurate(locale);
+
   const {
     track: neteaseTrack,
     loading: neteaseLoading,
     error: neteaseError,
     nextTrack,
-  } = useNeteasePlaylist();
+  } = useNeteasePlaylist(curateData?.playlistIds);
 
   const {
     data: atmosphere,
@@ -31,11 +36,24 @@ export function MoodOutput() {
     error: atmosphereError,
   } = useAtmosphere(neteaseTrack?.name ?? null, neteaseTrack?.artist ?? null, locale);
 
-  const { currentTrack, isPlaying, isLoading: audioLoading, progress, playNetease, pause } =
+  const { currentTrack, isPlaying, isLoading: audioLoading, playNetease, pause } =
     useAudioStore();
 
   // Unified display readiness: wait for atmosphere (or timeout) before showing content
   const [displayReady, setDisplayReady] = useState(false);
+
+  // Apply atmosphere tint colors based on AI-generated tags
+  const setAtmosphereColors = useAtmosphereColorStore((s) => s.setColors);
+  const resetAtmosphereColors = useAtmosphereColorStore((s) => s.reset);
+
+  useEffect(() => {
+    if (atmosphere?.tags && atmosphere.tags.length > 0) {
+      const colors = applyAtmosphereColors(atmosphere.tags);
+      setAtmosphereColors(colors.primary, colors.secondary, colors.palette);
+    } else if (!neteaseTrack) {
+      resetAtmosphereColors();
+    }
+  }, [atmosphere?.tags, neteaseTrack, setAtmosphereColors, resetAtmosphereColors]);
 
   useEffect(() => {
     if (!neteaseTrack) {
@@ -96,6 +114,21 @@ export function MoodOutput() {
     window.addEventListener('moodrift:request-play', handler);
     return () => window.removeEventListener('moodrift:request-play', handler);
   }, [isPlaying, neteaseTrack]);
+
+  // Listen for Orb swipe drift request
+  useEffect(() => {
+    const handler = () => {
+      failCountRef.current = 0;
+      const n = nextTrack();
+      if (n) {
+        retryPlayRef.current(n);
+      } else if (neteaseTrack) {
+        retryPlayRef.current(neteaseTrack);
+      }
+    };
+    window.addEventListener('moodrift:request-drift', handler);
+    return () => window.removeEventListener('moodrift:request-drift', handler);
+  }, [neteaseTrack, nextTrack]);
 
   const handleMainAction = () => {
     if (isPlaying) {
@@ -221,15 +254,30 @@ export function MoodOutput() {
               </button>
             </div>
 
-            {/* Progress bar */}
-            {isPlaying && (
-              <div className="mt-2 w-48 mx-auto h-0.5 bg-muted/40 rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-primary rounded-full"
-                  style={{ width: `${progress}%` }}
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
+            {/* AI Curate button */}
+            <div className="flex items-center justify-center mt-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  curate();
+                }}
+                disabled={curateLoading}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-muted/40 transition-colors disabled:opacity-40"
+              >
+                {curateLoading ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+                <span>
+                  {curateLoading ? t('output.curating') : t('output.curate')}
+                </span>
+              </button>
+            </div>
+            {curateError && (
+              <p className="text-[10px] text-destructive/80 mt-1">
+                {curateError}
+              </p>
             )}
 
             {/* Source badge */}

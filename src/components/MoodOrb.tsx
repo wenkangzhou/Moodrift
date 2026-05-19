@@ -3,10 +3,8 @@
 import { useRef, useState, useEffect, Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useAudioStore } from '@/stores/useAudioStore';
+import { useAtmosphereColorStore } from '@/stores/useAtmosphereColorStore';
 import * as THREE from 'three';
-
-const DEFAULT_COLOR = '#A78BFA';
-const DEFAULT_SECONDARY = '#7DD3FC';
 
 function OrbMesh({
   color,
@@ -126,14 +124,15 @@ function OrbMesh({
 
 function Scene({ isLoading }: { isLoading: boolean }) {
   const { isPlaying } = useAudioStore();
+  const { primary, secondary } = useAtmosphereColorStore();
 
   return (
     <>
       <ambientLight intensity={0.2} />
       <directionalLight position={[5, 5, 5]} intensity={0.5} color="#CBD5E1" />
       <OrbMesh
-        color={DEFAULT_COLOR}
-        secondary={DEFAULT_SECONDARY}
+        color={primary}
+        secondary={secondary}
         isPlaying={isPlaying}
         isLoading={isLoading}
       />
@@ -142,12 +141,14 @@ function Scene({ isLoading }: { isLoading: boolean }) {
 }
 
 function FallbackOrb({ isPlaying, isLoading }: { isPlaying: boolean; isLoading: boolean }) {
+  const { primary, secondary } = useAtmosphereColorStore();
+
   return (
     <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center animate-float">
       <div
         className="absolute inset-0 rounded-full blur-3xl"
         style={{
-          background: `radial-gradient(circle, ${DEFAULT_COLOR}${isLoading ? '70' : isPlaying ? '50' : '30'} 0%, transparent 70%)`,
+          background: `radial-gradient(circle, ${primary}${isLoading ? '70' : isPlaying ? '50' : '30'} 0%, transparent 70%)`,
           animation: isLoading
             ? 'pulse-glow 0.6s ease-in-out infinite alternate'
             : isPlaying
@@ -158,8 +159,8 @@ function FallbackOrb({ isPlaying, isLoading }: { isPlaying: boolean; isLoading: 
       <div
         className="relative w-48 h-48 md:w-60 md:h-60 rounded-full transition-all duration-700"
         style={{
-          background: `radial-gradient(circle at 35% 35%, ${DEFAULT_COLOR} 0%, ${DEFAULT_SECONDARY}${isLoading ? 'ff' : isPlaying ? '80' : '60'} 50%, ${DEFAULT_COLOR}20 100%)`,
-          boxShadow: `0 0 ${isLoading ? '100px' : isPlaying ? '80px' : '50px'} ${DEFAULT_COLOR}${isLoading ? '90' : isPlaying ? '60' : '40'}, inset 0 0 40px ${DEFAULT_SECONDARY}20`,
+          background: `radial-gradient(circle at 35% 35%, ${primary} 0%, ${secondary}${isLoading ? 'ff' : isPlaying ? '80' : '60'} 50%, ${primary}20 100%)`,
+          boxShadow: `0 0 ${isLoading ? '100px' : isPlaying ? '80px' : '50px'} ${primary}${isLoading ? '90' : isPlaying ? '60' : '40'}, inset 0 0 40px ${secondary}20`,
           transform: isLoading ? 'scale(0.88)' : 'scale(1)',
         }}
       />
@@ -176,6 +177,13 @@ export function MoodOrb() {
   const [mounted, setMounted] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
   const { isPlaying, isLoading, pause } = useAudioStore();
+
+  // Swipe detection ref
+  const swipeRef = useRef<{ startX: number; startY: number; tracking: boolean }>({
+    startX: 0,
+    startY: 0,
+    tracking: false,
+  });
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
@@ -207,6 +215,49 @@ export function MoodOrb() {
     }
   };
 
+  const SWIPE_THRESHOLD = 50;
+  const VERTICAL_TOLERANCE = 30;
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragRafRef = useRef(0);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    swipeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      tracking: true,
+    };
+    setDragOffset(0);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!swipeRef.current.tracking) return;
+    const dx = e.clientX - swipeRef.current.startX;
+    const dy = e.clientY - swipeRef.current.startY;
+
+    // Only respond to mostly-horizontal drags
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // Dampen the visual follow so it doesn't fly off-screen
+      const damped = dx * 0.4;
+      if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = requestAnimationFrame(() => setDragOffset(damped));
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!swipeRef.current.tracking) return;
+    swipeRef.current.tracking = false;
+    if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current);
+    setDragOffset(0);
+
+    const dx = e.clientX - swipeRef.current.startX;
+    const dy = e.clientY - swipeRef.current.startY;
+
+    if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dy) < VERTICAL_TOLERANCE) {
+      // Horizontal swipe detected — drift to next track
+      window.dispatchEvent(new CustomEvent('moodrift:request-drift'));
+    }
+  };
+
   if (!mounted) {
     return (
       <div className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center">
@@ -215,11 +266,25 @@ export function MoodOrb() {
     );
   }
 
+  const orbHandlers = {
+    onClick: handleClick,
+    onPointerDown: handlePointerDown,
+    onPointerMove: handlePointerMove,
+    onPointerUp: handlePointerUp,
+    onPointerLeave: handlePointerUp,
+  };
+
+  const dragStyle: React.CSSProperties = {
+    transform: `translateX(${dragOffset}px)`,
+    transition: dragOffset === 0 ? 'transform 0.3s ease-out' : 'none',
+  };
+
   if (useFallback) {
     return (
       <div
-        className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center cursor-pointer"
-        onClick={handleClick}
+        className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center cursor-pointer touch-pan-y select-none"
+        {...orbHandlers}
+        style={dragStyle}
       >
         <FallbackOrb isPlaying={isPlaying} isLoading={isLoading} />
       </div>
@@ -227,7 +292,11 @@ export function MoodOrb() {
   }
 
   return (
-    <div className="w-full h-[32vh] md:h-[38vh] relative cursor-pointer" onClick={handleClick}>
+    <div
+      className="w-full h-[32vh] md:h-[38vh] relative cursor-pointer touch-pan-y select-none"
+      {...orbHandlers}
+      style={dragStyle}
+    >
       <Canvas
         camera={{ position: [0, 0, 4], fov: 45 }}
         dpr={[1, 2]}

@@ -57,6 +57,35 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     getGenerativePlayer().stop(true);
   };
 
+  const fadeOutAudio = (el: HTMLAudioElement, durationMs = 400) => {
+    const steps = Math.max(8, Math.round(durationMs / 25));
+    const stepMs = durationMs / steps;
+    const startVol = el.volume;
+    const decrement = startVol / steps;
+    let step = 0;
+    const tick = () => {
+      step++;
+      el.volume = Math.max(0, el.volume - decrement);
+      if (step < steps) {
+        setTimeout(tick, stepMs);
+      } else {
+        el.pause();
+        el.src = '';
+      }
+    };
+    tick();
+  };
+
+  const crossfadeOut = () => {
+    clearProgress();
+    if (audioEl) {
+      const oldEl = audioEl;
+      audioEl = null;
+      fadeOutAudio(oldEl, 400);
+    }
+    getGenerativePlayer().stop();
+  };
+
   const startNeteaseProgress = (durationMs: number) => {
     clearProgress();
     progressTimer = setInterval(() => {
@@ -91,8 +120,8 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         }
       }
 
-      // Full reload for a new track
-      cleanup();
+      // Full reload for a new track — crossfade out old audio
+      crossfadeOut();
 
       const url = await getNeteaseAudioUrl(track.id);
       if (!url) {
@@ -108,6 +137,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       }
 
       audioEl = new Audio(url);
+      audioEl.volume = 0;
       // Do NOT set crossOrigin — Netease does not send CORS headers,
       // and plain <audio> can still play cross-domain without it.
 
@@ -158,6 +188,19 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         clear();
         set({ isLoading: false, isPlaying: true });
         startNeteaseProgress(track.duration * 1000);
+
+        // Fade in volume over 600ms
+        const fadeSteps = 24;
+        const fadeStepMs = 25;
+        const increment = 1 / fadeSteps;
+        let f = 0;
+        const fadeIn = () => {
+          f++;
+          if (!audioEl) return;
+          audioEl.volume = Math.min(1, audioEl.volume + increment);
+          if (f < fadeSteps) setTimeout(fadeIn, fadeStepMs);
+        };
+        fadeIn();
       };
 
       const onEnded = () => {
@@ -188,7 +231,15 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     },
 
     playGenerative: (track) => {
-      cleanup();
+      // Fade out netease audio; generative gets immediate stop since
+      // the new generative track has its own 2s built-in fade-in.
+      clearProgress();
+      if (audioEl) {
+        const oldEl = audioEl;
+        audioEl = null;
+        fadeOutAudio(oldEl, 400);
+      }
+      getGenerativePlayer().stop(true);
 
       const unified: UnifiedTrack = {
         name: track.name,

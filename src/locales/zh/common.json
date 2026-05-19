@@ -44,6 +44,8 @@
     "listening": "正在聆听氛围…",
     "play": "沉浸",
     "drift": "漂移",
-    "next": "下一首"
+    "next": "下一首",
+    "curate": "AI 策展",
+    "curating": "策展中…"
   }
 }

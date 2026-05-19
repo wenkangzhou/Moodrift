@@ -2,10 +2,17 @@
 
 import { useRef, useEffect } from 'react';
 import { useAudioStore } from '@/stores/useAudioStore';
+import { useAtmosphereColorStore } from '@/stores/useAtmosphereColorStore';
 
 export function BackgroundFlow() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { isPlaying } = useAudioStore();
+  const { palette } = useAtmosphereColorStore();
+  const paletteRef = useRef(palette);
+
+  useEffect(() => {
+    paletteRef.current = palette;
+  }, [palette]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -24,16 +31,11 @@ export function BackgroundFlow() {
     resize();
     window.addEventListener('resize', resize);
 
-    // Color palettes per environment
-    const palettes: Record<string, string[]> = {
-      rain: ['#7DD3FC20', '#A78BFA20', '#60A5FA15'],
-      city: ['#F9A8D420', '#7DD3FC20', '#C084FC15'],
-      mountain: ['#A78BFA20', '#94A3B820', '#CBD5E115'],
-      night: ['#7DD3FC20', '#A78BFA20', '#818CF815'],
-      sunset: ['#F9A8D420', '#A78BFA20', '#F472B615'],
+    const getPalette = () => {
+      const p = paletteRef.current;
+      return p.length >= 3 ? p : ['#7DD3FC20', '#A78BFA20', '#818CF815'];
     };
 
-    const palette = palettes.night;
     const particleCount = 65;
 
     interface Particle {
@@ -47,6 +49,7 @@ export function BackgroundFlow() {
     }
 
     const particles: Particle[] = [];
+    const initialPalette = getPalette();
     for (let i = 0; i < particleCount; i++) {
       particles.push({
         x: Math.random() * w,
@@ -54,7 +57,7 @@ export function BackgroundFlow() {
         vx: (Math.random() - 0.5) * 0.4,
         vy: (Math.random() - 0.5) * 0.4,
         radius: Math.random() * 3 + 1.5,
-        color: palette[Math.floor(Math.random() * palette.length)],
+        color: initialPalette[Math.floor(Math.random() * initialPalette.length)],
         alpha: Math.random() * 0.6 + 0.3,
       });
     }
@@ -65,6 +68,7 @@ export function BackgroundFlow() {
       ctx.clearRect(0, 0, w, h);
 
       const speedMult = isPlaying ? 2.5 : 1;
+      const currentPalette = getPalette();
 
       // Draw flowing lines between nearby particles
       for (let i = 0; i < particles.length; i++) {
@@ -124,7 +128,7 @@ export function BackgroundFlow() {
         ctx.lineTo(0, h);
         ctx.closePath();
         const grad = ctx.createLinearGradient(0, h - 160, 0, h);
-        grad.addColorStop(0, palette[0].replace('20', '12'));
+        grad.addColorStop(0, currentPalette[0].replace('20', '12'));
         grad.addColorStop(1, 'transparent');
         ctx.fillStyle = grad;
         ctx.fill();
