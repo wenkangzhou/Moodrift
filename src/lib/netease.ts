@@ -71,6 +71,53 @@ export async function getNeteaseAudioUrl(id: number): Promise<string | null> {
   }
 }
 
+interface RawNeteaseTrack {
+  id: number;
+  name: string;
+  artists?: { name: string }[];
+  ar?: { name: string }[];
+  album?: { picUrl: string };
+  al?: { picUrl: string };
+  duration?: number;
+  dt?: number;
+}
+
+export async function fetchPlaylistTracks(ids: number[]): Promise<NeteaseTrack[]> {
+  const responses = await Promise.allSettled(
+    ids.map(async (pid) => {
+      try {
+        const res = await fetch(`/api/netease/playlist?id=${pid}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data?.playlist?.tracks ?? []) as RawNeteaseTrack[];
+      } catch {
+        return [];
+      }
+    })
+  );
+
+  const allTracks: NeteaseTrack[] = [];
+  responses.forEach((r) => {
+    if (r.status === 'fulfilled' && r.value.length > 0) {
+      const tracks = r.value.map((t) => ({
+        id: t.id,
+        name: t.name,
+        artist: t.artists?.[0]?.name ?? t.ar?.[0]?.name ?? 'Unknown',
+        cover: t.album?.picUrl ?? t.al?.picUrl ?? '',
+        duration: Math.round((t.duration ?? t.dt ?? 0) / 1000),
+      }));
+      allTracks.push(...tracks);
+    }
+  });
+
+  const seen = new Set<number>();
+  return allTracks.filter((t) => {
+    if (seen.has(t.id)) return false;
+    seen.add(t.id);
+    return true;
+  });
+}
+
 export function pickRandomTrack(tracks: NeteaseTrack[]): NeteaseTrack | null {
   if (!tracks.length) return null;
   return tracks[Math.floor(Math.random() * tracks.length)];

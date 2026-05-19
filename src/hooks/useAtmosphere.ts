@@ -8,11 +8,11 @@ export interface AtmosphereData {
 
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-function cacheKey(trackName: string, artist: string, locale: string) {
+export function cacheKey(trackName: string, artist: string, locale: string) {
   return `moodrift-track-${trackName}-${artist}-${locale}`;
 }
 
-function getCached(trackName: string, artist: string, locale: string): AtmosphereData | null {
+export function getCached(trackName: string, artist: string, locale: string): AtmosphereData | null {
   try {
     const raw = localStorage.getItem(cacheKey(trackName, artist, locale));
     if (!raw) return null;
@@ -27,7 +27,7 @@ function getCached(trackName: string, artist: string, locale: string): Atmospher
   }
 }
 
-function setCached(trackName: string, artist: string, locale: string, data: AtmosphereData) {
+export function setCached(trackName: string, artist: string, locale: string, data: AtmosphereData) {
   try {
     localStorage.setItem(
       cacheKey(trackName, artist, locale),
@@ -67,6 +67,7 @@ export function useAtmosphere(trackName: string | null, artist: string | null, l
 
     setLoading(true);
     setError(null);
+    const timeoutId = setTimeout(() => abortRef.current?.abort(), 4000);
     try {
       const res = await fetch('/api/generate-atmosphere', {
         method: 'POST',
@@ -74,6 +75,7 @@ export function useAtmosphere(trackName: string | null, artist: string | null, l
         body: JSON.stringify({ trackName, artist, locale }),
         signal: abortRef.current.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -84,7 +86,11 @@ export function useAtmosphere(trackName: string | null, artist: string | null, l
       setCached(trackName, artist, locale, result);
       setData(result);
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') return;
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Atmosphere generation timed out');
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to generate atmosphere');
     } finally {
       setLoading(false);
