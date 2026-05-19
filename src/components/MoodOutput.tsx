@@ -213,10 +213,10 @@ export function MoodOutput() {
                 )}
                 <span>
                   {isBusy
-                    ? 'Loading...'
+                    ? t('loading')
                     : isPlaying
                       ? t('output.drift')
-                      : 'Play Mood'}
+                      : t('output.play')}
                 </span>
               </button>
             </div>

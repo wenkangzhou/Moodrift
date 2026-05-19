@@ -42,7 +42,8 @@
     "recommended": "推荐音乐",
     "ready": "正在挑选音乐…",
     "listening": "正在聆听氛围…",
-    "drift": "换一首",
+    "play": "沉浸",
+    "drift": "漂移",
     "next": "下一首"
   }
 }
