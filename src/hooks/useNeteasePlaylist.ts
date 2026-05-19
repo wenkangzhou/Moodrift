@@ -48,32 +48,36 @@ export function useNeteasePlaylist() {
     }
     triedPlaylists.current = new Set();
 
+    // Shuffle and take top 5 — parallel fetch keeps first-load under ~1s
+    const shuffledIds = shuffle(allPlaylistIds).slice(0, 5);
+
+    const responses = await Promise.allSettled(
+      shuffledIds.map(async (pid) => {
+        try {
+          const res = await fetch(`/api/netease/playlist?id=${pid}`);
+          if (!res.ok) return [];
+          const data = await res.json();
+          return (data?.playlist?.tracks ?? []) as RawNeteaseTrack[];
+        } catch {
+          return [];
+        }
+      })
+    );
+
     const allTracks: NeteaseTrack[] = [];
-
-    // Shuffle playlist order so we don't always hit the same ones first
-    const shuffledIds = shuffle(allPlaylistIds);
-
-    for (const pid of shuffledIds) {
-      try {
-        const res = await fetch(`/api/netease/playlist?id=${pid}`);
-        if (!res.ok) continue;
-
-        const data = await res.json();
-        const rawTracks = data?.result?.tracks ?? data?.playlist?.tracks ?? [];
-        const tracks: NeteaseTrack[] = (rawTracks as RawNeteaseTrack[]).map((t) => ({
+    responses.forEach((r, i) => {
+      if (r.status === 'fulfilled' && r.value.length > 0) {
+        const tracks = r.value.map((t) => ({
           id: t.id,
           name: t.name,
           artist: t.artists?.[0]?.name ?? t.ar?.[0]?.name ?? 'Unknown',
           cover: t.album?.picUrl ?? t.al?.picUrl ?? '',
           duration: Math.round((t.duration ?? t.dt ?? 0) / 1000),
         }));
-
         allTracks.push(...tracks);
-        triedPlaylists.current.add(pid);
-      } catch {
-        // try next playlist
+        triedPlaylists.current.add(shuffledIds[i]);
       }
-    }
+    });
 
     // Deduplicate by track id since official toplists and mood playlists overlap
     const seen = new Set<number>();

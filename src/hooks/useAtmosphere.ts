@@ -50,6 +50,9 @@ export function useAtmosphere(trackName: string | null, artist: string | null, l
       return;
     }
 
+    // Clear old data immediately so UI enters loading state
+    setData(null);
+
     const cached = getCached(trackName, artist, locale);
     if (cached) {
       setData(cached);
@@ -88,16 +91,16 @@ export function useAtmosphere(trackName: string | null, artist: string | null, l
     }
   }, [trackName, artist, locale]);
 
-  // Auto-fetch when track changes, with debounce to avoid API spam during rapid skipping
+  // Auto-fetch when track changes — no debounce, loading state is intentional
   useEffect(() => {
     if (!trackName || !artist) {
       const raf = requestAnimationFrame(() => setData(null));
       return () => cancelAnimationFrame(raf);
     }
-    const timer = setTimeout(() => {
+    const raf = requestAnimationFrame(() => {
       fetchAtmosphere();
-    }, 600);
-    return () => clearTimeout(timer);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [trackName, artist, locale, fetchAtmosphere]);
 
   return { data, loading, error, refetch: fetchAtmosphere };
