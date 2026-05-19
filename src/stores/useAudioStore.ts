@@ -92,25 +92,21 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       }
 
       // Full reload for a new track
-      try {
-        const checkRes = await fetch(`/api/netease/check?id=${track.id}`);
-        const checkData = await checkRes.json();
-        if (!checkData.available) {
-          console.warn('[AudioStore] Track unavailable, id:', track.id);
-          if (options.onFail) {
-            options.onFail();
-          } else if (options.fallback) {
-            get().playGenerative(options.fallback);
-          }
-          return;
-        }
-      } catch {
-        // If check endpoint fails, proceed anyway
-      }
-
       cleanup();
 
-      const url = getNeteaseAudioUrl(track.id);
+      const url = await getNeteaseAudioUrl(track.id);
+      if (!url) {
+        console.warn('[AudioStore] Track unavailable, id:', track.id);
+        if (options.onFail) {
+          options.onFail();
+        } else if (options.fallback) {
+          get().playGenerative(options.fallback);
+        } else {
+          set({ isLoading: false, isPlaying: false });
+        }
+        return;
+      }
+
       audioEl = new Audio(url);
       // Do NOT set crossOrigin — Netease does not send CORS headers,
       // and plain <audio> can still play cross-domain without it.

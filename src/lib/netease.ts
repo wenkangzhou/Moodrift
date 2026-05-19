@@ -60,8 +60,15 @@ export const playlistCatalog: Record<number, string> = {
   5453912201: '黑胶 VIP 爱听榜，深度听众精选，品质与口碑兼具',
 };
 
-export function getNeteaseAudioUrl(id: number): string {
-  return `https://music.163.com/song/media/outer/url?id=${id}.mp3`;
+export async function getNeteaseAudioUrl(id: number): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/netease/url?id=${id}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.url ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function pickRandomTrack(tracks: NeteaseTrack[]): NeteaseTrack | null {
