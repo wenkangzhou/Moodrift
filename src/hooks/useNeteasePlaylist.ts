@@ -27,6 +27,9 @@ function shuffle<T>(arr: T[]): T[] {
 // All preset playlist IDs merged into one pool
 const allPlaylistIds = Object.values(moodPlaylistMap).flat();
 
+const INITIAL_BATCH = 2;  // playlists to fetch for first song (fast)
+const EXPAND_BATCH = 3;   // playlists to fetch in background
+
 export function useNeteasePlaylist(playlistIds?: number[]) {
   const [candidates, setCandidates] = useState<NeteaseTrack[]>([]);
   const [index, setIndex] = useState(0);
@@ -38,19 +41,10 @@ export function useNeteasePlaylist(playlistIds?: number[]) {
 
   const playlistIdsKey = playlistIds?.join(',') ?? '';
 
-  const fetchCandidates = useCallback(async (): Promise<NeteaseTrack[]> => {
-    const isFirstLoad = candidates.length === 0;
-
-    setLoading(true);
-    setError(null);
-    triedPlaylists.current = new Set();
-
-    // Use AI-curated playlists if provided, otherwise fallback to random pool
-    const targetPool = playlistIds && playlistIds.length > 0 ? playlistIds : allPlaylistIds;
-    const shuffledIds = shuffle(targetPool).slice(0, 5);
-
+  // Low-level fetch helper: fetch given playlist IDs and optionally append to pool
+  const doFetch = useCallback(async (ids: number[], append: boolean): Promise<NeteaseTrack[]> => {
     const responses = await Promise.allSettled(
-      shuffledIds.map(async (pid) => {
+      ids.map(async (pid) => {
         try {
           const res = await fetch(`/api/netease/playlist?id=${pid}`);
           if (!res.ok) return [];
@@ -73,23 +67,57 @@ export function useNeteasePlaylist(playlistIds?: number[]) {
           duration: Math.round((t.duration ?? t.dt ?? 0) / 1000),
         }));
         allTracks.push(...tracks);
-        triedPlaylists.current.add(shuffledIds[i]);
+        triedPlaylists.current.add(ids[i]);
       }
     });
 
-    // Deduplicate by track id since official toplists and mood playlists overlap
-    const seen = new Set<number>();
-    const uniqueTracks = allTracks.filter((t) => {
-      if (seen.has(t.id)) return false;
-      seen.add(t.id);
-      return true;
-    });
+    if (allTracks.length === 0) return [];
 
-    if (uniqueTracks.length > 0) {
+    if (append) {
+      let addedCount = 0;
+      setCandidates((prev) => {
+        const seen = new Set(prev.map((c) => c.id));
+        const newTracks = allTracks.filter((t) => {
+          if (seen.has(t.id)) return false;
+          seen.add(t.id);
+          return true;
+        });
+        addedCount = newTracks.length;
+        if (newTracks.length === 0) return prev;
+        return shuffle([...prev, ...newTracks]);
+      });
+      if (addedCount > 0) {
+        console.log('[useNeteasePlaylist] Expanded pool with', addedCount, 'new tracks');
+      }
+      return allTracks;
+    } else {
+      const seen = new Set<number>();
+      const uniqueTracks = allTracks.filter((t) => {
+        if (seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      });
       setCandidates(shuffle(uniqueTracks));
       setIndex(0);
       console.log('[useNeteasePlaylist] Loaded', uniqueTracks.length, 'tracks from', triedPlaylists.current.size, 'playlists');
-    } else {
+      return uniqueTracks;
+    }
+  }, []);
+
+  const fetchCandidates = useCallback(async (): Promise<NeteaseTrack[]> => {
+    const isFirstLoad = candidates.length === 0;
+
+    setLoading(true);
+    setError(null);
+    triedPlaylists.current = new Set();
+
+    // Use AI-curated playlists if provided, otherwise fallback to random pool
+    const targetPool = playlistIds && playlistIds.length > 0 ? playlistIds : allPlaylistIds;
+    const shuffledIds = shuffle(targetPool).slice(0, INITIAL_BATCH);
+
+    const uniqueTracks = await doFetch(shuffledIds, false);
+
+    if (uniqueTracks.length === 0) {
       setError('Could not load tracks from Netease');
       if (isFirstLoad) {
         setCandidates([]);
@@ -100,29 +128,42 @@ export function useNeteasePlaylist(playlistIds?: number[]) {
 
     setLoading(false);
     return uniqueTracks;
-  }, [candidates.length, playlistIds]);
+  }, [candidates.length, playlistIds, doFetch]);
 
-  // Auto-fetch on mount when pool is empty
+  // Background expansion: fetch more playlists and append silently
+  const expandPool = useCallback(async (): Promise<void> => {
+    const targetPool = playlistIds && playlistIds.length > 0 ? playlistIds : allPlaylistIds;
+    const remainingIds = shuffle(targetPool).filter((id) => !triedPlaylists.current.has(id)).slice(0, EXPAND_BATCH);
+
+    if (remainingIds.length === 0) return;
+
+    await doFetch(remainingIds, true);
+  }, [playlistIds, doFetch]);
+
+  // Auto-fetch on mount when pool is empty — fetch 2 playlists fast, then expand in background
   useEffect(() => {
     if (autoFetchRef.current) return;
     if (candidates.length === 0 && !loading && !error) {
       autoFetchRef.current = true;
-      const raf = requestAnimationFrame(() => {
-        fetchCandidates();
+      const raf = requestAnimationFrame(async () => {
+        await fetchCandidates();
+        // After first tracks are available, silently expand the pool
+        expandPool();
       });
       return () => cancelAnimationFrame(raf);
     }
-  }, [candidates.length, loading, error, fetchCandidates]);
+  }, [candidates.length, loading, error, fetchCandidates, expandPool]);
 
-  // Refetch when AI-curated playlistIds change
+  // Refetch when AI-curated playlistIds change — same fast-then-expand pattern
   useEffect(() => {
     if (!playlistIdsKey || playlistIdsKey === prevPlaylistKeyRef.current || loading) return;
     prevPlaylistKeyRef.current = playlistIdsKey;
-    const raf = requestAnimationFrame(() => {
-      fetchCandidates();
+    const raf = requestAnimationFrame(async () => {
+      await fetchCandidates();
+      expandPool();
     });
     return () => cancelAnimationFrame(raf);
-  }, [playlistIdsKey, fetchCandidates, loading]);
+  }, [playlistIdsKey, fetchCandidates, expandPool, loading]);
 
   const nextTrack = useCallback((): NeteaseTrack | null => {
     if (candidates.length === 0) return null;
