@@ -18,6 +18,8 @@ export function MoodOutput() {
   const retryPlayRef = useRef<(t?: NeteaseTrack) => void>(() => {});
   const failCountRef = useRef(0);
   const autoPlayInitiatedRef = useRef(false);
+  const pendingCurateRef = useRef(false);
+  const prevCurateLoadingRef = useRef(false);
 
   const { data: curateData, loading: curateLoading, error: curateError, curate } = useCurate(locale);
 
@@ -58,7 +60,25 @@ export function MoodOutput() {
     }
   }, [currentSong, isPlaying, audioLoading, poolLoading]);
 
-  // Retry helper: auto-advance on timeout/error
+  // Detect curate success → mark pending so we play the new pool when it loads
+  useEffect(() => {
+    const wasLoading = prevCurateLoadingRef.current;
+    prevCurateLoadingRef.current = curateLoading;
+    if (wasLoading && !curateLoading && !curateError && curateData) {
+      pendingCurateRef.current = true;
+    }
+  }, [curateLoading, curateError, curateData]);
+
+  // When a curate-triggered pool finishes loading, auto-play the new first song
+  useEffect(() => {
+    if (pendingCurateRef.current && !poolLoading && currentSong) {
+      pendingCurateRef.current = false;
+      failCountRef.current = 0;
+      retryPlayRef.current(currentSong);
+    }
+  }, [poolLoading, currentSong]);
+
+  // Retry helper: auto-advance on timeout/error and auto-play next on song end
   useEffect(() => {
     retryPlayRef.current = (t?: NeteaseTrack) => {
       const target = t ?? currentSong;
@@ -75,6 +95,13 @@ export function MoodOutput() {
               setTimeout(() => {
                 retryPlayRef.current(n);
               }, 300);
+            }
+          },
+          onComplete: () => {
+            failCountRef.current = 0;
+            const n = nextSong();
+            if (n) {
+              retryPlayRef.current(n);
             }
           },
         });

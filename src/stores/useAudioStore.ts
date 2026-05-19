@@ -23,6 +23,7 @@ export interface UnifiedTrack {
 interface PlayNeteaseOptions {
   fallback?: GenerativeTrack;
   onFail?: () => void;
+  onComplete?: () => void;
   timeoutMs?: number;
 }
 
@@ -47,43 +48,19 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     }
   };
 
-  const cleanup = () => {
+  const hardStopEl = (el: HTMLAudioElement | null) => {
+    if (!el) return;
+    try { el.pause(); } catch {}
+    try { el.src = ''; } catch {}
+  };
+
+  const stopCurrent = () => {
     clearProgress();
     if (audioEl) {
-      audioEl.pause();
-      audioEl.src = '';
+      hardStopEl(audioEl);
       audioEl = null;
     }
     getGenerativePlayer().stop(true);
-  };
-
-  const fadeOutAudio = (el: HTMLAudioElement, durationMs = 400) => {
-    const steps = Math.max(8, Math.round(durationMs / 25));
-    const stepMs = durationMs / steps;
-    const startVol = el.volume;
-    const decrement = startVol / steps;
-    let step = 0;
-    const tick = () => {
-      step++;
-      el.volume = Math.max(0, el.volume - decrement);
-      if (step < steps) {
-        setTimeout(tick, stepMs);
-      } else {
-        el.pause();
-        el.src = '';
-      }
-    };
-    tick();
-  };
-
-  const crossfadeOut = () => {
-    clearProgress();
-    if (audioEl) {
-      const oldEl = audioEl;
-      audioEl = null;
-      fadeOutAudio(oldEl, 400);
-    }
-    getGenerativePlayer().stop();
   };
 
   const startNeteaseProgress = (durationMs: number) => {
@@ -120,8 +97,8 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         }
       }
 
-      // Full reload for a new track — crossfade out old audio
-      crossfadeOut();
+      // Hard stop the old audio — no crossfade overlap allowed
+      stopCurrent();
 
       const url = await getNeteaseAudioUrl(track.id);
       if (!url) {
@@ -136,10 +113,13 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         return;
       }
 
-      audioEl = new Audio(url);
-      audioEl.volume = 0;
+      const myEl = new Audio(url);
+      myEl.volume = 0;
+      audioEl = myEl;
       // Do NOT set crossOrigin — Netease does not send CORS headers,
       // and plain <audio> can still play cross-domain without it.
+
+      const isCurrentEl = () => audioEl === myEl;
 
       const unified: UnifiedTrack = {
         name: track.name,
@@ -155,8 +135,10 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       let hasStarted = false;
       const timeoutMs = options.timeoutMs ?? 8000;
       const timeout = setTimeout(() => {
+        if (!isCurrentEl()) return;
         console.warn('[AudioStore] Netease load timeout, id:', track.id);
-        cleanup();
+        hardStopEl(myEl);
+        if (audioEl === myEl) audioEl = null;
         if (options.onFail) {
           options.onFail();
         } else if (options.fallback) {
@@ -169,10 +151,13 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       const clear = () => clearTimeout(timeout);
 
       const onCanPlay = () => {
-        audioEl!.play().catch((err) => {
+        if (!isCurrentEl()) return;
+        myEl.play().catch((err) => {
+          if (!isCurrentEl()) return;
           console.warn('[AudioStore] Netease play failed:', err);
           clear();
-          cleanup();
+          hardStopEl(myEl);
+          if (audioEl === myEl) audioEl = null;
           if (options.onFail) {
             options.onFail();
           } else if (options.fallback) {
@@ -184,6 +169,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       };
 
       const onPlay = () => {
+        if (!isCurrentEl()) return;
         hasStarted = true;
         clear();
         set({ isLoading: false, isPlaying: true });
@@ -195,24 +181,30 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         const increment = 1 / fadeSteps;
         let f = 0;
         const fadeIn = () => {
+          if (!isCurrentEl()) return;
           f++;
-          if (!audioEl) return;
-          audioEl.volume = Math.min(1, audioEl.volume + increment);
+          myEl.volume = Math.min(1, myEl.volume + increment);
           if (f < fadeSteps) setTimeout(fadeIn, fadeStepMs);
         };
         fadeIn();
       };
 
       const onEnded = () => {
+        if (!isCurrentEl()) return;
         clear();
-        cleanup();
+        hardStopEl(myEl);
+        if (audioEl === myEl) audioEl = null;
+        clearProgress();
         set({ isPlaying: false, progress: 0 });
+        options.onComplete?.();
       };
 
       const onError = () => {
+        if (!isCurrentEl()) return;
         console.warn('[AudioStore] Netease audio load error, id:', track.id);
         clear();
-        cleanup();
+        hardStopEl(myEl);
+        if (audioEl === myEl) audioEl = null;
         if (!hasStarted) {
           if (options.onFail) {
             options.onFail();
@@ -224,20 +216,19 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         }
       };
 
-      audioEl.addEventListener('canplaythrough', onCanPlay, { once: true });
-      audioEl.addEventListener('play', onPlay, { once: true });
-      audioEl.addEventListener('ended', onEnded, { once: true });
-      audioEl.addEventListener('error', onError, { once: true });
+      myEl.addEventListener('canplaythrough', onCanPlay, { once: true });
+      myEl.addEventListener('play', onPlay, { once: true });
+      myEl.addEventListener('ended', onEnded, { once: true });
+      myEl.addEventListener('error', onError, { once: true });
     },
 
     playGenerative: (track) => {
-      // Fade out netease audio; generative gets immediate stop since
-      // the new generative track has its own 2s built-in fade-in.
+      // Hard stop netease audio before generative starts
       clearProgress();
       if (audioEl) {
         const oldEl = audioEl;
         audioEl = null;
-        fadeOutAudio(oldEl, 400);
+        hardStopEl(oldEl);
       }
       getGenerativePlayer().stop(true);
 
@@ -272,7 +263,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         }, 300);
       } catch (err) {
         console.error('[AudioStore] Generative play failed:', err);
-        cleanup();
+        stopCurrent();
         set({ isLoading: false, isPlaying: false, currentTrack: null, progress: 0 });
       }
     },

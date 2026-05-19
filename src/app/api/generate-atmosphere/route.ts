@@ -59,18 +59,149 @@ async function callKimi(prompt: string, maxTokens: number): Promise<string> {
   return data.choices?.[0]?.message?.content ?? '';
 }
 
+function sanitizeForJson(str: string): string {
+  // Remove markdown code-block wrappers
+  return str
+    .replace(/^```json\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+}
+
 function parseJsonFromContent(content: string): unknown {
-  // Try to find JSON object or array
-  const objMatch = content.match(/\{[\s\S]*\}/);
-  const arrMatch = content.match(/\[[\s\S]*\]/);
-  if (arrMatch && objMatch) {
-    // Prefer array if both exist and array is longer (batch mode)
-    const jsonStr = arrMatch[0].length >= objMatch[0].length ? arrMatch[0] : objMatch[0];
-    return JSON.parse(jsonStr);
+  const raw = sanitizeForJson(content);
+
+  // Try strict JSON parse first
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // fallthrough
   }
-  if (arrMatch) return JSON.parse(arrMatch[0]);
-  if (objMatch) return JSON.parse(objMatch[0]);
-  throw new Error('No JSON found in response');
+
+  // Greedy regex fallback (from first { to last } / [ to last ])
+  const objMatch = raw.match(/\{[\s\S]*\}/);
+  const arrMatch = raw.match(/\[[\s\S]*\]/);
+  if (arrMatch && objMatch) {
+    const jsonStr = arrMatch[0].length >= objMatch[0].length ? arrMatch[0] : objMatch[0];
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      // fallthrough
+    }
+  }
+  if (arrMatch) {
+    try {
+      return JSON.parse(arrMatch[0]);
+    } catch {
+      // fallthrough
+    }
+  }
+  if (objMatch) {
+    try {
+      return JSON.parse(objMatch[0]);
+    } catch {
+      // fallthrough
+    }
+  }
+
+  throw new Error('No valid JSON found in response');
+}
+
+function normalizeAtmosphere(item: unknown): AtmosphereData {
+  const obj = item as Record<string, unknown>;
+  return {
+    title: typeof obj.title === 'string' ? obj.title : 'Untitled',
+    description: typeof obj.description === 'string' ? obj.description : '',
+    tags: Array.isArray(obj.tags)
+      ? obj.tags.filter((t): t is string => typeof t === 'string')
+      : ['Ambient'],
+  };
+}
+
+/** Extract balanced {} objects via a simple stack scanner. */
+function extractJsonObjects(text: string): string[] {
+  const objects: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+      } else if (ch === '\\') {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        objects.push(text.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+  return objects;
+}
+
+function parseBatchResponse(content: string, trackCount: number): AtmosphereData[] {
+  const raw = sanitizeForJson(content);
+
+  // Strategy 1: strict JSON array
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map(normalizeAtmosphere);
+    }
+  } catch {
+    // fallthrough
+  }
+
+  // Strategy 2: greedy regex extraction
+  try {
+    const parsed = parseJsonFromContent(content);
+    if (Array.isArray(parsed)) {
+      return parsed.map(normalizeAtmosphere);
+    }
+  } catch {
+    // fallthrough
+  }
+
+  // Strategy 3: extract individual JSON objects with a balanced-brace scanner
+  const objects = extractJsonObjects(raw);
+  const results: AtmosphereData[] = [];
+  for (const objStr of objects) {
+    try {
+      const parsed = JSON.parse(objStr);
+      if (typeof parsed === 'object' && parsed !== null) {
+        results.push(normalizeAtmosphere(parsed));
+      }
+    } catch {
+      // skip malformed fragment
+    }
+  }
+
+  if (results.length < trackCount) {
+    console.warn(
+      `[generate-atmosphere] Parsed ${results.length}/${trackCount} items from Kimi. Falling back to defaults. Raw snippet:`,
+      raw.slice(0, 200)
+    );
+  }
+
+  while (results.length < trackCount) {
+    results.push({ title: 'Untitled', description: '', tags: ['Ambient'] });
+  }
+  return results.slice(0, trackCount);
 }
 
 export async function POST(request: NextRequest) {
@@ -89,24 +220,7 @@ export async function POST(request: NextRequest) {
       // Batch mode
       const prompt = buildBatchPrompt(tracks as TrackRef[], locale);
       const content = await callKimi(prompt, 16384);
-      const parsed = parseJsonFromContent(content);
-
-      if (!Array.isArray(parsed)) {
-        return NextResponse.json(
-          { error: 'Batch response is not an array', raw: content },
-          { status: 500 }
-        );
-      }
-
-      const results: AtmosphereData[] = parsed.map((item: unknown) => {
-        const obj = item as Record<string, unknown>;
-        return {
-          title: typeof obj.title === 'string' ? obj.title : 'Untitled',
-          description: typeof obj.description === 'string' ? obj.description : '',
-          tags: Array.isArray(obj.tags) ? obj.tags.filter((t): t is string => typeof t === 'string') : ['Ambient'],
-        };
-      });
-
+      const results = parseBatchResponse(content, tracks.length);
       return NextResponse.json(results);
     }
 
@@ -123,12 +237,9 @@ export async function POST(request: NextRequest) {
     const content = await callKimi(prompt, 8192);
     const parsed = parseJsonFromContent(content) as Record<string, unknown>;
 
-    return NextResponse.json({
-      title: typeof parsed.title === 'string' ? parsed.title : 'Untitled',
-      description: typeof parsed.description === 'string' ? parsed.description : '',
-      tags: Array.isArray(parsed.tags) ? parsed.tags.filter((t): t is string => typeof t === 'string') : ['Ambient'],
-    });
+    return NextResponse.json(normalizeAtmosphere(parsed));
   } catch (err) {
+    console.error('[generate-atmosphere] Error:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 }

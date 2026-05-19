@@ -7,51 +7,6 @@ export interface CurateData {
   description: string;
 }
 
-const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-function cacheKey(env: string, act: string, emo: string, energy: number, locale: string) {
-  return `moodrift-curate-${env}-${act}-${emo}-${energy}-${locale}`;
-}
-
-function getCached(
-  env: string,
-  act: string,
-  emo: string,
-  energy: number,
-  locale: string
-): CurateData | null {
-  try {
-    const raw = localStorage.getItem(cacheKey(env, act, emo, energy, locale));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.timestamp > CACHE_TTL) {
-      localStorage.removeItem(cacheKey(env, act, emo, energy, locale));
-      return null;
-    }
-    return parsed.data;
-  } catch {
-    return null;
-  }
-}
-
-function setCached(
-  env: string,
-  act: string,
-  emo: string,
-  energy: number,
-  locale: string,
-  data: CurateData
-) {
-  try {
-    localStorage.setItem(
-      cacheKey(env, act, emo, energy, locale),
-      JSON.stringify({ data, timestamp: Date.now() })
-    );
-  } catch {
-    // storage full, ignore
-  }
-}
-
 export function useCurate(locale: string) {
   const { environment, activity, emotion, energy } = useAppStore();
 
@@ -61,13 +16,6 @@ export function useCurate(locale: string) {
   const abortRef = useRef<AbortController | null>(null);
 
   const curate = useCallback(async () => {
-    const cached = getCached(environment, activity, emotion, energy, locale);
-    if (cached) {
-      setData(cached);
-      setError(null);
-      return cached;
-    }
-
     if (abortRef.current) {
       abortRef.current.abort();
     }
@@ -89,7 +37,6 @@ export function useCurate(locale: string) {
       }
 
       const result: CurateData = await res.json();
-      setCached(environment, activity, emotion, energy, locale, result);
       setData(result);
       return result;
     } catch (err) {
