@@ -202,7 +202,8 @@ export function MoodOutput() {
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
         >
-          {/* Album cover */}
+          {/* Album cover - REMOVED */}
+          {/*
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={currentSong?.id ?? 'no-cover'}
@@ -224,6 +225,7 @@ export function MoodOutput() {
               )}
             </motion.div>
           </AnimatePresence>
+          */}
 
           {/* Text content — song name shown immediately,文案 crossfades in when ready */}
           <AnimatePresence mode="wait" initial={false}>
