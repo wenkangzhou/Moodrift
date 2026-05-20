@@ -46,6 +46,8 @@
     "drift": "Drift",
     "next": "Next",
     "curate": "AI Curate",
-    "curating": "Curating…"
+    "curating": "Curating…",
+    "aiOffline": "AI offline",
+    "loadTracksError": "Could not load tracks from Netease"
   }
 }

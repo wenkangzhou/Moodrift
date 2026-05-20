@@ -91,15 +91,38 @@ Return ONLY the following JSON format, no other text:
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content ?? '';
 
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json(
-        { error: 'Failed to parse Kimi response', raw: content },
-        { status: 500 }
-      );
+    // Robust JSON parsing: strip markdown, try multiple strategies
+    const raw = content
+      .replace(/^```json\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+
+    let parsed: Record<string, unknown> | null = null;
+
+    // Strategy 1: strict parse
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      // Strategy 2: greedy regex
+      const greedy = raw.match(/\{[\s\S]*\}/);
+      if (greedy) {
+        try {
+          parsed = JSON.parse(greedy[0]) as Record<string, unknown>;
+        } catch {
+          /* fallthrough */
+        }
+      }
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed) {
+      console.warn('[curate] Failed to parse Kimi response, using defaults. Raw:', raw.slice(0, 200));
+      return NextResponse.json({
+        playlistIds: [],
+        title: '',
+        description: '',
+      });
+    }
+
     const rawIds = Array.isArray(parsed.playlistIds) ? parsed.playlistIds : [];
     const playlistIds = rawIds
       .map((id: unknown) => (typeof id === 'string' ? parseInt(id, 10) : Number(id)))
@@ -107,8 +130,8 @@ Return ONLY the following JSON format, no other text:
 
     return NextResponse.json({
       playlistIds,
-      title: parsed.title ?? '',
-      description: parsed.description ?? '',
+      title: typeof parsed.title === 'string' ? parsed.title : '',
+      description: typeof parsed.description === 'string' ? parsed.description : '',
     });
   } catch (err) {
     return NextResponse.json(

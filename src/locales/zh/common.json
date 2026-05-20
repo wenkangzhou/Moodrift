@@ -46,6 +46,8 @@
     "drift": "漂移",
     "next": "下一首",
     "curate": "AI 策展",
-    "curating": "策展中…"
+    "curating": "策展中…",
+    "aiOffline": "AI 离线",
+    "loadTracksError": "无法从网易云加载曲目"
   }
 }

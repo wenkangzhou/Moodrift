@@ -107,6 +107,7 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
   const autoFetchRef = useRef(false);
   const prevPlaylistKeyRef = useRef<string>('');
   const prefetchedIdsRef = useRef<Set<number>>(new Set());
+  const retriedIdsRef = useRef<Set<number>>(new Set());
 
   const playlistIdsKey = playlistIds?.join(',') ?? '';
 
@@ -173,7 +174,7 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
     const initialTracks = await fetchPlaylistTracks(initialIds);
 
     if (initialTracks.length === 0) {
-      setPoolError('Could not load tracks from Netease');
+      setPoolError('output.loadTracksError');
       if (isFirstLoad) {
         setSongs([]);
         setIndex(0);
@@ -193,6 +194,7 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
     setIndex(0);
     setPoolLoading(false);
     prefetchedIdsRef.current.clear();
+    retriedIdsRef.current.clear();
     console.log('[useSongPool] Pool ready with', newSongs.length, 'tracks');
 
     // Step 3: Prefetch atmospheres for the initial pool in one batch
@@ -245,27 +247,46 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
     return () => cancelAnimationFrame(raf);
   }, [playlistIdsKey, loadPool, poolLoading]);
 
-  // If user skips faster than prefetch, ensure current song still gets atmosphere
+  // If user skips faster than prefetch, ensure current song still gets atmosphere.
+  // Also retry failed atmospheres once per pool.
   useEffect(() => {
     const song = songs[index];
-    if (!song || song.atmosphereStatus !== 'idle') return;
+    if (!song) return;
+    const canFetch =
+      song.atmosphereStatus === 'idle' ||
+      (song.atmosphereStatus === 'error' && !retriedIdsRef.current.has(song.id));
+    if (!canFetch) return;
+
+    if (song.atmosphereStatus === 'error') {
+      retriedIdsRef.current.add(song.id);
+    }
     updateSongAtmosphere(song.id, undefined, 'loading');
     fetchAtmosphereForSong(song, locale).then(({ data, error }) => {
       updateSongAtmosphere(song.id, data, error ? 'error' : 'done');
     });
   }, [index, songs, locale, updateSongAtmosphere]);
 
-  // Lazy batch prefetch: when user skips, look ahead for idle songs and batch them
+  // Lazy batch prefetch: when user skips, look ahead for idle/error songs and batch them
   useEffect(() => {
     if (songs.length === 0) return;
     const idleAhead = songs
       .slice(index + 1)
-      .filter((s) => s.atmosphereStatus === 'idle' && !prefetchedIdsRef.current.has(s.id))
+      .filter((s) => {
+        if (s.atmosphereStatus === 'idle') return !prefetchedIdsRef.current.has(s.id);
+        if (s.atmosphereStatus === 'error') return !retriedIdsRef.current.has(s.id);
+        return false;
+      })
       .slice(0, 20);
 
     if (idleAhead.length === 0) return;
 
-    idleAhead.forEach((s) => prefetchedIdsRef.current.add(s.id));
+    idleAhead.forEach((s) => {
+      if (s.atmosphereStatus === 'error') {
+        retriedIdsRef.current.add(s.id);
+      } else {
+        prefetchedIdsRef.current.add(s.id);
+      }
+    });
 
     const timer = setTimeout(() => {
       prefetchAtmospheres(idleAhead);

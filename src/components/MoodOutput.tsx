@@ -136,6 +136,33 @@ export function MoodOutput() {
     return () => window.removeEventListener('moodrift:request-drift', handler);
   }, [currentSong, nextSong]);
 
+  // Keyboard shortcuts: Space = play/pause, Right Arrow = next
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (isPlaying) {
+          pause();
+        } else if (currentSong) {
+          failCountRef.current = 0;
+          retryPlayRef.current(currentSong);
+        }
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        failCountRef.current = 0;
+        const n = nextSong();
+        if (n) {
+          retryPlayRef.current(n);
+        } else if (currentSong) {
+          retryPlayRef.current(currentSong);
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isPlaying, currentSong, nextSong, pause]);
+
   const handleMainAction = () => {
     if (isPlaying) {
       failCountRef.current = 0;
@@ -192,12 +219,12 @@ export function MoodOutput() {
               </p>
               {poolError && (
                 <p className="text-xs text-destructive mb-1">
-                  {poolError}
+                  {t(poolError)}
                 </p>
               )}
               {hasAtmosphereError && (
                 <p className="text-[9px] text-muted-foreground/40 mb-1">
-                  AI offline
+                  {t('output.aiOffline')}
                 </p>
               )}
 
