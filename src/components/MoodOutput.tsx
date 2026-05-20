@@ -193,7 +193,7 @@ export function MoodOutput() {
   const showTags = atmosphere?.tags ?? [];
 
   return (
-    <div className="text-center cursor-pointer min-h-[140px]" onClick={handleContainerClick}>
+    <div className="text-center cursor-pointer min-h-[160px]" onClick={handleContainerClick}>
       <AnimatePresence mode="wait">
         <motion.div
           key={currentSong?.id ?? 'empty'}
@@ -202,6 +202,29 @@ export function MoodOutput() {
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
         >
+          {/* Album cover */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={currentSong?.id ?? 'no-cover'}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+              className="mx-auto mb-2 w-11 h-11 rounded-lg overflow-hidden shadow-md shadow-primary/10"
+            >
+              {currentSong?.cover ? (
+                <img
+                  src={currentSong.cover}
+                  alt={currentSong.name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-full h-full bg-muted/60 animate-pulse" />
+              )}
+            </motion.div>
+          </AnimatePresence>
+
           {/* Text content — song name shown immediately,文案 crossfades in when ready */}
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
@@ -217,97 +240,153 @@ export function MoodOutput() {
               <p className="text-xs md:text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto mb-2">
                 {showDesc}
               </p>
-              {poolError && (
-                <p className="text-xs text-destructive mb-1">
-                  {t(poolError)}
-                </p>
-              )}
-              {hasAtmosphereError && (
-                <p className="text-[9px] text-muted-foreground/40 mb-1">
-                  {t('output.aiOffline')}
-                </p>
-              )}
 
-              {/* Tags — show artist badge as fallback while文案 loads */}
-              <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
+              {/* Error / offline states as subtle badges */}
+              <div className="flex items-center justify-center gap-1.5 mb-2 flex-wrap">
+                {poolError && (
+                  <Badge variant="destructive" className="px-2 py-0 text-[10px]">
+                    {t(poolError)}
+                  </Badge>
+                )}
+                {hasAtmosphereError && (
+                  <Badge variant="outline" className="px-2 py-0 text-[10px] text-muted-foreground/60 border-muted-foreground/20">
+                    {t('output.aiOffline')}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Tags — staggered entrance animation */}
+              <motion.div
+                className="flex items-center justify-center gap-2 mb-2 flex-wrap"
+                variants={{
+                  hidden: {},
+                  visible: { transition: { staggerChildren: 0.04 } },
+                }}
+                initial="hidden"
+                animate="visible"
+              >
                 {showTags.length > 0 ? (
                   showTags.map((tag) => (
-                    <Badge
+                    <motion.div
                       key={tag}
-                      variant="outline"
-                      className="px-2 py-0.5 text-[10px] tracking-wide border-border/50 text-muted-foreground cursor-default"
+                      variants={{
+                        hidden: { opacity: 0, y: 4, scale: 0.92 },
+                        visible: { opacity: 1, y: 0, scale: 1 },
+                      }}
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
                     >
-                      {tag}
-                    </Badge>
+                      <Badge
+                        variant="outline"
+                        className="px-2 py-0.5 text-[10px] tracking-wide border-border/50 text-muted-foreground cursor-default"
+                      >
+                        {tag}
+                      </Badge>
+                    </motion.div>
                   ))
                 ) : currentSong ? (
-                  <Badge variant="secondary" className="px-2 py-0.5 text-[10px] tracking-wide">
-                    {currentSong?.artist ?? '...'}
-                  </Badge>
+                  <motion.div
+                    variants={{
+                      hidden: { opacity: 0, y: 4, scale: 0.92 },
+                      visible: { opacity: 1, y: 0, scale: 1 },
+                    }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                  >
+                    <Badge variant="secondary" className="px-2 py-0.5 text-[10px] tracking-wide">
+                      {currentSong?.artist ?? '...'}
+                    </Badge>
+                  </motion.div>
                 ) : null}
-              </div>
+              </motion.div>
             </motion.div>
           </AnimatePresence>
 
-            {/* Single action button */}
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleMainAction();
-                }}
-                disabled={isBusy || audioLoading || !currentSong}
-                className="flex items-center gap-2 px-6 py-2 rounded-full bg-primary/90 text-primary-foreground text-xs font-medium hover:bg-primary transition-colors disabled:opacity-50 shadow-lg shadow-primary/20"
-              >
-                {isBusy ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : isPlaying ? (
-                  <SkipForward className="w-4 h-4" />
-                ) : (
-                  <Play className="w-4 h-4 ml-0.5" />
-                )}
-                <span>
-                  {isBusy
-                    ? t('loading')
-                    : isPlaying
-                      ? t('output.drift')
-                      : t('output.play')}
-                </span>
-              </button>
-            </div>
+          {/* Single action button */}
+          <motion.div
+            className="flex items-center justify-center gap-2"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.15, ease: 'easeOut' }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleMainAction();
+              }}
+              disabled={isBusy || audioLoading || !currentSong}
+              className="flex items-center gap-2 px-6 py-2 rounded-full bg-primary/90 text-primary-foreground text-xs font-medium hover:bg-primary transition-colors disabled:opacity-50 shadow-lg shadow-primary/20"
+            >
+              {isBusy ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isPlaying ? (
+                <SkipForward className="w-4 h-4" />
+              ) : (
+                <Play className="w-4 h-4 ml-0.5" />
+              )}
+              <span>
+                {isBusy
+                  ? t('loading')
+                  : isPlaying
+                    ? t('output.drift')
+                    : t('output.play')}
+              </span>
+            </button>
+          </motion.div>
 
-            {/* AI Curate button */}
-            <div className="flex items-center justify-center mt-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  curate();
-                }}
-                disabled={curateLoading}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-muted/40 transition-colors disabled:opacity-40"
-              >
-                {curateLoading ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3 h-3" />
-                )}
-                <span>
-                  {curateLoading ? t('output.curating') : t('output.curate')}
-                </span>
-              </button>
-            </div>
+          {/* AI Curate button */}
+          <motion.div
+            className="flex items-center justify-center mt-2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.25 }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                curate();
+              }}
+              disabled={curateLoading}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] text-muted-foreground/70 hover:text-foreground hover:bg-muted/40 transition-colors disabled:opacity-40"
+            >
+              {curateLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              <span>
+                {curateLoading ? t('output.curating') : t('output.curate')}
+              </span>
+            </button>
+          </motion.div>
+
+          {/* Curate error — badge style */}
+          <AnimatePresence>
             {curateError && (
-              <p className="text-[10px] text-destructive/80 mt-1">
-                {curateError}
-              </p>
+              <motion.div
+                initial={{ opacity: 0, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 2 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center justify-center mt-1"
+              >
+                <Badge variant="destructive" className="px-2 py-0 text-[10px]">
+                  {curateError}
+                </Badge>
+              </motion.div>
             )}
+          </AnimatePresence>
 
-            {/* Source badge */}
+          {/* Source badge */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: currentTrack ? 1 : 0 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+          >
             {currentTrack && (
               <p className="text-[9px] text-muted-foreground/40 mt-1">
                 {currentTrack.source === 'netease' ? 'NetEase Cloud Music' : 'Generative Audio'}
               </p>
             )}
+          </motion.div>
         </motion.div>
       </AnimatePresence>
     </div>

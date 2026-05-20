@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect, Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
+import { motion } from 'framer-motion';
 import { useAudioStore } from '@/stores/useAudioStore';
 import { useAtmosphereColorStore } from '@/stores/useAtmosphereColorStore';
 import * as THREE from 'three';
@@ -143,12 +144,21 @@ function Scene({ isLoading }: { isLoading: boolean }) {
 function FallbackOrb({ isPlaying, isLoading }: { isPlaying: boolean; isLoading: boolean }) {
   const { primary, secondary } = useAtmosphereColorStore();
 
+  const glowOpacity = isLoading ? '44' : isPlaying ? '31' : '19';
+  const bodyOpacity = isLoading ? 'ff' : isPlaying ? '80' : '60';
+  const shadowSpread = isLoading ? '100px' : isPlaying ? '80px' : '50px';
+  const shadowOpacity = isLoading ? '90' : isPlaying ? '60' : '40';
+
   return (
     <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center animate-float">
-      <div
+      {/* Glow layer */}
+      <motion.div
         className="absolute inset-0 rounded-full blur-3xl"
+        animate={{
+          background: `radial-gradient(circle, ${primary}${glowOpacity} 0%, transparent 70%)`,
+        }}
+        transition={{ duration: 0.7, ease: 'easeOut' }}
         style={{
-          background: `radial-gradient(circle, ${primary}${isLoading ? '70' : isPlaying ? '50' : '30'} 0%, transparent 70%)`,
           animation: isLoading
             ? 'pulse-glow 0.6s ease-in-out infinite alternate'
             : isPlaying
@@ -156,13 +166,15 @@ function FallbackOrb({ isPlaying, isLoading }: { isPlaying: boolean; isLoading: 
               : 'pulse-glow 3s ease-in-out infinite alternate',
         }}
       />
-      <div
-        className="relative w-48 h-48 md:w-60 md:h-60 rounded-full transition-all duration-700"
-        style={{
-          background: `radial-gradient(circle at 35% 35%, ${primary} 0%, ${secondary}${isLoading ? 'ff' : isPlaying ? '80' : '60'} 50%, ${primary}20 100%)`,
-          boxShadow: `0 0 ${isLoading ? '100px' : isPlaying ? '80px' : '50px'} ${primary}${isLoading ? '90' : isPlaying ? '60' : '40'}, inset 0 0 40px ${secondary}20`,
-          transform: isLoading ? 'scale(0.88)' : 'scale(1)',
+      {/* Orb body */}
+      <motion.div
+        className="relative w-48 h-48 md:w-60 md:h-60 rounded-full"
+        animate={{
+          background: `radial-gradient(circle at 35% 35%, ${primary} 0%, ${secondary}${bodyOpacity} 50%, ${primary}20 100%)`,
+          boxShadow: `0 0 ${shadowSpread} ${primary}${shadowOpacity}, inset 0 0 40px ${secondary}20`,
+          scale: isLoading ? 0.88 : 1,
         }}
+        transition={{ duration: 0.7, ease: 'easeOut' }}
       />
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center">

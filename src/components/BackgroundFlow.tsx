@@ -82,6 +82,11 @@ export function BackgroundFlow() {
         if (p.y < -50) p.y = h + 50;
         if (p.y > h + 50) p.y = -50;
 
+        // Gradually shift particle color toward current palette
+        if (Math.random() < 0.015) {
+          p.color = currentPalette[Math.floor(Math.random() * currentPalette.length)];
+        }
+
         // Draw particle
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius * (isPlaying ? 1.5 : 1), 0, Math.PI * 2);
