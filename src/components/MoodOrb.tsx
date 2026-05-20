@@ -166,16 +166,25 @@ function FallbackOrb({ isPlaying, isLoading }: { isPlaying: boolean; isLoading: 
               : 'pulse-glow 3s ease-in-out infinite alternate',
         }}
       />
-      {/* Orb body */}
+      {/* Orb body — outer glow only, inner glow via overlay to avoid inset seam */}
       <motion.div
-        className="relative w-48 h-48 md:w-60 md:h-60 rounded-full"
+        className="relative w-48 h-48 md:w-60 md:h-60 rounded-full overflow-hidden"
         animate={{
           background: `radial-gradient(circle at 35% 35%, ${primary} 0%, ${secondary}${bodyOpacity} 50%, ${primary}20 100%)`,
-          boxShadow: `0 0 ${shadowSpread} ${primary}${shadowOpacity}, inset 0 0 40px ${secondary}20`,
+          boxShadow: `0 0 ${shadowSpread} ${primary}${shadowOpacity}`,
           scale: isLoading ? 0.88 : 1,
         }}
         transition={{ duration: 0.7, ease: 'easeOut' }}
-      />
+      >
+        {/* Inner glow overlay replaces inset box-shadow */}
+        <motion.div
+          className="absolute inset-0 rounded-full"
+          animate={{
+            background: `radial-gradient(circle at 50% 50%, transparent 55%, ${secondary}18 100%)`,
+          }}
+          transition={{ duration: 0.7, ease: 'easeOut' }}
+        />
+      </motion.div>
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-7 h-7 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
