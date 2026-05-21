@@ -43,13 +43,7 @@ export async function GET(request: Request) {
     const data = await res.json();
     const url = data?.data?.[0]?.url ?? null;
 
-    if (!url) {
-      return NextResponse.json(
-        { error: 'Track URL not available' },
-        { status: 404 }
-      );
-    }
-
+    // Return 200 with null url so the client can gracefully fall back / skip
     return NextResponse.json({ url });
   } catch (err) {
     console.error('[Netease API] URL fetch failed:', err);
