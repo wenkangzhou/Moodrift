@@ -1,17 +1,7 @@
-const CACHE_NAME = 'moodrift-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/zh',
-  '/en',
-  '/logo.png',
-];
+const CACHE_NAME = 'moodrift-v3';
+const STATIC_HOST = self.location.origin;
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
   self.skipWaiting();
 });
 
@@ -44,23 +34,42 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
-        // Cache same-origin static assets
-        if (response.ok && new URL(request.url).origin === self.location.origin) {
+  const url = new URL(request.url);
+
+  // Navigation requests (HTML pages): Network-first, fallback to cache
+  // This ensures code updates are visible immediately on next visit.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-        }
-        return response;
-      }).catch(() => {
-        // Offline fallback for navigation requests
-        if (request.mode === 'navigate') {
-          return caches.match('/');
-        }
-        throw new Error('Network error');
-      });
-    })
-  );
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Same-origin static assets (JS, CSS, images): Stale-while-revalidate
+  // Next.js hashes filenames, so updated code always requests new files.
+  if (url.origin === STATIC_HOST) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            }
+            return response;
+          })
+          .catch(() => cached);
+
+        // Return cached immediately if available, while updating in background
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
 });

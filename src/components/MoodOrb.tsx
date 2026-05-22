@@ -370,6 +370,7 @@ export function MoodOrb() {
   const VERTICAL_TOLERANCE = 30;
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).style.touchAction = 'none';
     swipeRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -407,6 +408,7 @@ export function MoodOrb() {
     if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current);
     setDragOffset(0);
     setDragOffsetY(0);
+    (e.currentTarget as HTMLElement).style.touchAction = '';
 
     const dx = e.clientX - swipeRef.current.startX;
     const dy = e.clientY - swipeRef.current.startY;
@@ -437,7 +439,7 @@ export function MoodOrb() {
   if (useFallback) {
     return (
       <motion.div
-        className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center cursor-pointer touch-pan-y select-none"
+        className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center cursor-pointer select-none"
         animate={{ x: dragOffset, y: dragOffsetY }}
         transition={
           isAtRest
@@ -461,7 +463,7 @@ export function MoodOrb() {
 
   return (
     <motion.div
-      className="w-full h-[32vh] md:h-[38vh] relative cursor-pointer touch-pan-y select-none"
+      className="w-full h-[32vh] md:h-[38vh] relative cursor-pointer select-none"
       animate={{ x: dragOffset, y: dragOffsetY }}
       transition={
         isAtRest
