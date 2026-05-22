@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { fetchPlaylistTracks, type NeteaseTrack } from '@/lib/netease';
+import { fetchPlaylistTracks, checkNeteaseUrls, type NeteaseTrack } from '@/lib/netease';
 import { type AtmosphereData, getCached, setCached } from '@/hooks/useAtmosphere';
 
 interface SongWithAtmosphere extends NeteaseTrack {
@@ -98,6 +98,7 @@ const allPlaylistIds = Object.values(
 const POOL_SIZE = 20;
 const INITIAL_PLAYLIST_BATCH = 2;
 const EXPAND_PLAYLIST_BATCH = 3;
+const MIN_POOL_SIZE = 5;
 
 export function useSongPool(locale: string, playlistIds?: number[]) {
   const [songs, setSongs] = useState<SongWithAtmosphere[]>([]);
@@ -185,7 +186,25 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
 
     // Step 2: Build pool of 20 tracks max
     const poolTracks = shuffle(initialTracks).slice(0, POOL_SIZE);
-    const newSongs: SongWithAtmosphere[] = poolTracks.map((t) => ({
+
+    // Step 2.5: Batch-check URL availability — filter out tracks that Netease has no URL for
+    const validIds = await checkNeteaseUrls(poolTracks.map((t) => t.id));
+    const validTracks = poolTracks.filter((t) => validIds.has(t.id));
+
+    // If too few valid tracks, try one more playlist batch before giving up
+    if (validTracks.length < MIN_POOL_SIZE) {
+      const extraIds = shuffle(targetPool)
+        .filter((id) => !initialIds.includes(id))
+        .slice(0, INITIAL_PLAYLIST_BATCH);
+      if (extraIds.length > 0) {
+        const extraTracks = await fetchPlaylistTracks(extraIds);
+        const extraPool = shuffle(extraTracks).slice(0, POOL_SIZE - validTracks.length);
+        const extraValidIds = await checkNeteaseUrls(extraPool.map((t) => t.id));
+        validTracks.push(...extraPool.filter((t) => extraValidIds.has(t.id)));
+      }
+    }
+
+    const newSongs: SongWithAtmosphere[] = validTracks.map((t) => ({
       ...t,
       atmosphereStatus: 'idle',
     }));
@@ -195,28 +214,32 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
     setPoolLoading(false);
     prefetchedIdsRef.current.clear();
     retriedIdsRef.current.clear();
-    console.log('[useSongPool] Pool ready with', newSongs.length, 'tracks');
+    console.log('[useSongPool] Pool ready with', newSongs.length, 'valid tracks');
 
     // Step 3: Prefetch atmospheres for the initial pool in one batch
-    poolTracks.forEach((t) => prefetchedIdsRef.current.add(t.id));
-    prefetchAtmospheres(poolTracks);
+    validTracks.forEach((t) => prefetchedIdsRef.current.add(t.id));
+    prefetchAtmospheres(validTracks);
 
-    // Step 4: Expand pool with more tracks in background (no atmosphere prefetch here — lazy loaded later)
+    // Step 4: Expand pool with more tracks in background
     const remainingIds = shuffle(targetPool)
       .filter((id) => !initialIds.includes(id))
       .slice(0, EXPAND_PLAYLIST_BATCH);
     if (remainingIds.length > 0) {
-      fetchPlaylistTracks(remainingIds).then((extraTracks) => {
+      fetchPlaylistTracks(remainingIds).then(async (extraTracks) => {
         if (extraTracks.length === 0) return;
         const shuffledExtra = shuffle(extraTracks);
+        const candidates = shuffledExtra.slice(0, POOL_SIZE);
+        const validExtraIds = await checkNeteaseUrls(candidates.map((t) => t.id));
+        const validExtra = candidates.filter((t) => validExtraIds.has(t.id));
+
         setSongs((prev) => {
           const seen = new Set(prev.map((s) => s.id));
-          const newOnes = shuffledExtra
+          const newOnes = validExtra
             .filter((t) => !seen.has(t.id))
             .slice(0, POOL_SIZE - prev.length)
             .map((t) => ({ ...t, atmosphereStatus: 'idle' as const }));
           if (newOnes.length === 0) return prev;
-          console.log('[useSongPool] Expanded pool with', newOnes.length, 'tracks');
+          console.log('[useSongPool] Expanded pool with', newOnes.length, 'valid tracks');
           return [...prev, ...newOnes];
         });
       });

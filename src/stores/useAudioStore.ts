@@ -8,6 +8,62 @@ function getGenerativePlayer(): GenerativePlayer {
   return globalPlayer;
 }
 
+function setupMediaSession(track: UnifiedTrack) {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+
+  const artwork = track.cover
+    ? [{ src: track.cover, sizes: '512x512', type: 'image/jpeg' }]
+    : [];
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: track.name,
+    artist: track.artist,
+    artwork,
+  });
+
+  navigator.mediaSession.setActionHandler('play', () => {
+    window.dispatchEvent(new CustomEvent('moodrift:request-play'));
+  });
+
+  navigator.mediaSession.setActionHandler('pause', () => {
+    useAudioStore.getState().pause();
+  });
+
+  navigator.mediaSession.setActionHandler('nexttrack', () => {
+    window.dispatchEvent(new CustomEvent('moodrift:request-drift'));
+  });
+
+  navigator.mediaSession.setActionHandler('previoustrack', () => {
+    window.dispatchEvent(new CustomEvent('moodrift:request-play'));
+  });
+
+  if ('setPositionState' in navigator.mediaSession) {
+    navigator.mediaSession.setPositionState({
+      duration: track.duration,
+      playbackRate: 1,
+      position: 0,
+    });
+  }
+}
+
+function updateMediaSessionPosition(position: number, duration: number) {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || !('setPositionState' in navigator.mediaSession)) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration,
+      playbackRate: 1,
+      position,
+    });
+  } catch {
+    // ignore
+  }
+}
+
+function setMediaSessionPlaybackState(state: 'playing' | 'paused' | 'none') {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+  navigator.mediaSession.playbackState = state;
+}
+
 export type TrackSource = 'netease' | 'generative';
 
 export interface UnifiedTrack {
@@ -65,10 +121,12 @@ export const useAudioStore = create<AudioStore>((set, get) => {
 
   const startNeteaseProgress = (durationMs: number) => {
     clearProgress();
+    const durationSec = durationMs / 1000;
     progressTimer = setInterval(() => {
       const current = audioEl?.currentTime ?? 0;
       const p = durationMs > 0 ? Math.min(100, (current * 1000 / durationMs) * 100) : 0;
       set({ progress: p });
+      updateMediaSessionPosition(current, durationSec);
       if (p >= 100) {
         clearProgress();
         set({ isPlaying: false, progress: 0 });
@@ -131,6 +189,8 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       };
 
       set({ isLoading: true, currentTrack: unified, progress: 0 });
+      setupMediaSession(unified);
+      setMediaSessionPlaybackState('playing');
 
       let hasStarted = false;
       const timeoutMs = options.timeoutMs ?? 8000;
@@ -173,6 +233,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         hasStarted = true;
         clear();
         set({ isLoading: false, isPlaying: true });
+        setMediaSessionPlaybackState('playing');
         startNeteaseProgress(track.duration * 1000);
 
         // Fade in volume over 600ms
@@ -241,15 +302,18 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       };
 
       set({ isLoading: true, currentTrack: unified, progress: 0 });
+      setupMediaSession(unified);
 
       try {
         const player = getGenerativePlayer();
         player.play(track, () => {
           clearProgress();
           set({ isPlaying: false, progress: 0 });
+          setMediaSessionPlaybackState('none');
         });
 
         set({ isLoading: false, isPlaying: true });
+        setMediaSessionPlaybackState('playing');
         const durationMs = track.duration * 1000;
         const startTime = Date.now();
         progressTimer = setInterval(() => {
@@ -275,6 +339,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       getGenerativePlayer().suspend();
       clearProgress();
       set({ isPlaying: false });
+      setMediaSessionPlaybackState('paused');
     },
   };
 });

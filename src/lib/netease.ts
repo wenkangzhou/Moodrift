@@ -71,6 +71,23 @@ export async function getNeteaseAudioUrl(id: number): Promise<string | null> {
   }
 }
 
+export async function checkNeteaseUrls(ids: number[]): Promise<Set<number>> {
+  if (ids.length === 0) return new Set();
+  try {
+    const res = await fetch(`/api/netease/url?ids=${ids.join(',')}`);
+    if (!res.ok) return new Set();
+    const data = await res.json();
+    const urls: Record<string, string | null> = data.urls ?? {};
+    const valid = new Set<number>();
+    for (const id of ids) {
+      if (urls[String(id)]) valid.add(id);
+    }
+    return valid;
+  } catch {
+    return new Set();
+  }
+}
+
 interface RawNeteaseTrack {
   id: number;
   name: string;
