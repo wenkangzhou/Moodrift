@@ -155,12 +155,14 @@ function FallbackOrb({
   isPlaying,
   isLoading,
   dragOffset,
+  dragOffsetY,
   pulseKey,
   ripples,
 }: {
   isPlaying: boolean;
   isLoading: boolean;
   dragOffset: number;
+  dragOffsetY: number;
   pulseKey: number;
   ripples: Ripple[];
 }) {
@@ -171,11 +173,13 @@ function FallbackOrb({
   const shadowSpread = isLoading ? '100px' : isPlaying ? '80px' : '50px';
   const shadowOpacity = isLoading ? '90' : isPlaying ? '60' : '40';
 
-  // Stretch physics: drag stretches horizontally, compresses vertically
-  const absOffset = Math.abs(dragOffset);
-  const stretch = Math.min(absOffset * 0.003, 0.3);
-  const scaleX = 1 + stretch;
-  const scaleY = 1 - stretch * 0.4;
+  // Stretch physics: drag stretches in the drag direction, compresses perpendicular
+  const absOffsetX = Math.abs(dragOffset);
+  const absOffsetY = Math.abs(dragOffsetY);
+  const hStretch = Math.min(absOffsetX * 0.003, 0.3);
+  const vStretch = Math.min(absOffsetY * 0.003, 0.3);
+  const scaleX = 1 + hStretch - vStretch * 0.4;
+  const scaleY = 1 - hStretch * 0.4 + vStretch;
   const rotateZ = dragOffset * 0.015;
 
   return (
@@ -213,7 +217,7 @@ function FallbackOrb({
 
       {/* Drag trail — appears behind orb when swiping */}
       <AnimatePresence>
-        {absOffset > 8 && (
+        {(absOffsetX > 8 || absOffsetY > 8) && (
           <motion.div
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl pointer-events-none"
             style={{
@@ -224,7 +228,8 @@ function FallbackOrb({
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{
               x: -dragOffset * 0.2,
-              opacity: Math.min(absOffset / 60, 0.45),
+              y: -dragOffsetY * 0.2,
+              opacity: Math.min(Math.max(absOffsetX, absOffsetY) / 60, 0.45),
               scaleX,
               scaleY,
             }}
@@ -247,9 +252,9 @@ function FallbackOrb({
         transition={{
           background: { duration: 0.7, ease: 'easeOut' },
           boxShadow: { duration: 0.7, ease: 'easeOut' },
-          scaleX: absOffset === 0 ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
-          scaleY: absOffset === 0 ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
-          rotateZ: absOffset === 0 ? { type: 'spring', stiffness: 400, damping: 20 } : { duration: 0.05 },
+          scaleX: (absOffsetX === 0 && absOffsetY === 0) ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
+          scaleY: (absOffsetX === 0 && absOffsetY === 0) ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
+          rotateZ: (absOffsetX === 0 && absOffsetY === 0) ? { type: 'spring', stiffness: 400, damping: 20 } : { duration: 0.05 },
         }}
       >
         {/* Inner glow overlay */}
@@ -307,6 +312,7 @@ export function MoodOrb() {
   });
 
   const [dragOffset, setDragOffset] = useState(0);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
   const dragRafRef = useRef(0);
 
   // Pulse animation trigger on song change
@@ -370,6 +376,7 @@ export function MoodOrb() {
       tracking: true,
     };
     setDragOffset(0);
+    setDragOffsetY(0);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -380,7 +387,17 @@ export function MoodOrb() {
     if (Math.abs(dx) > Math.abs(dy)) {
       const damped = dx * 0.4;
       if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current);
-      dragRafRef.current = requestAnimationFrame(() => setDragOffset(damped));
+      dragRafRef.current = requestAnimationFrame(() => {
+        setDragOffset(damped);
+        setDragOffsetY(0);
+      });
+    } else {
+      const damped = dy * 0.4;
+      if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = requestAnimationFrame(() => {
+        setDragOffset(0);
+        setDragOffsetY(damped);
+      });
     }
   };
 
@@ -389,6 +406,7 @@ export function MoodOrb() {
     swipeRef.current.tracking = false;
     if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current);
     setDragOffset(0);
+    setDragOffsetY(0);
 
     const dx = e.clientX - swipeRef.current.startX;
     const dy = e.clientY - swipeRef.current.startY;
@@ -414,13 +432,15 @@ export function MoodOrb() {
     onPointerLeave: handlePointerUp,
   };
 
+  const isAtRest = dragOffset === 0 && dragOffsetY === 0;
+
   if (useFallback) {
     return (
       <motion.div
         className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center cursor-pointer touch-pan-y select-none"
-        animate={{ x: dragOffset }}
+        animate={{ x: dragOffset, y: dragOffsetY }}
         transition={
-          dragOffset === 0
+          isAtRest
             ? { type: 'spring', stiffness: 400, damping: 28, mass: 0.8 }
             : { duration: 0 }
         }
@@ -430,6 +450,7 @@ export function MoodOrb() {
             isPlaying={isPlaying}
             isLoading={isLoading}
             dragOffset={dragOffset}
+            dragOffsetY={dragOffsetY}
             pulseKey={pulseKey}
             ripples={ripples}
           />
@@ -441,9 +462,9 @@ export function MoodOrb() {
   return (
     <motion.div
       className="w-full h-[32vh] md:h-[38vh] relative cursor-pointer touch-pan-y select-none"
-      animate={{ x: dragOffset }}
+      animate={{ x: dragOffset, y: dragOffsetY }}
       transition={
-        dragOffset === 0
+        isAtRest
           ? { type: 'spring', stiffness: 400, damping: 28, mass: 0.8 }
           : { duration: 0 }
       }

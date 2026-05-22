@@ -39,6 +39,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Skip caching in development (localhost)
+  if (self.location.hostname === 'localhost') {
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
