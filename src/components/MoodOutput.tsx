@@ -194,7 +194,7 @@ export function MoodOutput() {
 
   return (
     <div className="text-center cursor-pointer min-h-[160px]" onClick={handleContainerClick}>
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={currentSong?.id ?? 'empty'}
           initial={{ opacity: 0, y: 12, scale: 0.96 }}
