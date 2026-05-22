@@ -2,10 +2,12 @@
 
 import { useRef, useState, useEffect, Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAudioStore } from '@/stores/useAudioStore';
 import { useAtmosphereColorStore } from '@/stores/useAtmosphereColorStore';
 import * as THREE from 'three';
+
+/* ─── Three.js Orb (desktop) ─── */
 
 function OrbMesh({
   color,
@@ -141,7 +143,27 @@ function Scene({ isLoading }: { isLoading: boolean }) {
   );
 }
 
-function FallbackOrb({ isPlaying, isLoading }: { isPlaying: boolean; isLoading: boolean }) {
+/* ─── Fallback Orb (mobile / touch) ─── */
+
+interface Ripple {
+  id: number;
+  x: number;
+  y: number;
+}
+
+function FallbackOrb({
+  isPlaying,
+  isLoading,
+  dragOffset,
+  pulseKey,
+  ripples,
+}: {
+  isPlaying: boolean;
+  isLoading: boolean;
+  dragOffset: number;
+  pulseKey: number;
+  ripples: Ripple[];
+}) {
   const { primary, secondary } = useAtmosphereColorStore();
 
   const glowOpacity = isLoading ? '44' : isPlaying ? '31' : '19';
@@ -149,42 +171,124 @@ function FallbackOrb({ isPlaying, isLoading }: { isPlaying: boolean; isLoading: 
   const shadowSpread = isLoading ? '100px' : isPlaying ? '80px' : '50px';
   const shadowOpacity = isLoading ? '90' : isPlaying ? '60' : '40';
 
+  // Stretch physics: drag stretches horizontally, compresses vertically
+  const absOffset = Math.abs(dragOffset);
+  const stretch = Math.min(absOffset * 0.003, 0.3);
+  const scaleX = 1 + stretch;
+  const scaleY = 1 - stretch * 0.4;
+  const rotateZ = dragOffset * 0.015;
+
   return (
-    <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center animate-float">
-      {/* Glow layer */}
-      <motion.div
-        className="absolute inset-0 rounded-full blur-3xl"
-        animate={{
-          background: `radial-gradient(circle, ${primary}${glowOpacity} 0%, transparent 70%)`,
-        }}
-        transition={{ duration: 0.7, ease: 'easeOut' }}
-        style={{
-          animation: isLoading
-            ? 'pulse-glow 0.6s ease-in-out infinite alternate'
-            : isPlaying
-              ? 'pulse-glow 1.5s ease-in-out infinite alternate'
-              : 'pulse-glow 3s ease-in-out infinite alternate',
-        }}
-      />
-      {/* Orb body — outer glow only, inner glow via overlay to avoid inset seam */}
-      <motion.div
-        className="relative w-48 h-48 md:w-60 md:h-60 rounded-full overflow-hidden"
-        animate={{
-          background: `radial-gradient(circle at 35% 35%, ${primary} 0%, ${secondary}${bodyOpacity} 50%, ${primary}20 100%)`,
-          boxShadow: `0 0 ${shadowSpread} ${primary}${shadowOpacity}`,
-          scale: isLoading ? 0.88 : 1,
-        }}
-        transition={{ duration: 0.7, ease: 'easeOut' }}
-      >
-        {/* Inner glow overlay replaces inset box-shadow */}
+    <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center">
+      {/* Ambient float wrapper */}
+      <div className="absolute inset-0 animate-float">
+        {/* Pulse ring on song change */}
+        <AnimatePresence>
+          {pulseKey > 0 && (
+            <motion.div
+              key={pulseKey}
+              className="absolute inset-0 rounded-full pointer-events-none"
+              style={{
+                border: `2px solid ${primary}`,
+                boxShadow: `0 0 20px ${primary}60`,
+              }}
+              initial={{ scale: 0.4, opacity: 0.6 }}
+              animate={{ scale: 2.8, opacity: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Glow layer */}
         <motion.div
-          className="absolute inset-0 rounded-full"
+          className="absolute inset-0 rounded-full blur-3xl"
           animate={{
-            background: `radial-gradient(circle at 50% 50%, transparent 55%, ${secondary}18 100%)`,
+            background: `radial-gradient(circle, ${primary}${glowOpacity} 0%, transparent 70%)`,
           }}
           transition={{ duration: 0.7, ease: 'easeOut' }}
+          style={{
+            animation: isLoading
+              ? 'pulse-glow 0.6s ease-in-out infinite alternate'
+              : isPlaying
+                ? 'pulse-glow 1.5s ease-in-out infinite alternate'
+                : 'pulse-glow 3s ease-in-out infinite alternate',
+          }}
         />
-      </motion.div>
+
+        {/* Drag trail — appears behind orb when swiping */}
+        <AnimatePresence>
+          {absOffset > 8 && (
+            <motion.div
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl pointer-events-none"
+              style={{
+                width: '35%',
+                height: '35%',
+                background: `radial-gradient(circle, ${secondary}80 0%, transparent 70%)`,
+              }}
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{
+                x: -dragOffset * 0.2,
+                opacity: Math.min(absOffset / 60, 0.45),
+                scaleX,
+                scaleY,
+              }}
+              exit={{ opacity: 0, scale: 0.5 }}
+              transition={{ duration: 0.15 }}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Orb body */}
+        <motion.div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 md:w-60 md:h-60 rounded-full overflow-hidden"
+          animate={{
+            background: `radial-gradient(circle at 35% 35%, ${primary} 0%, ${secondary}${bodyOpacity} 50%, ${primary}20 100%)`,
+            boxShadow: `0 0 ${shadowSpread} ${primary}${shadowOpacity}`,
+            scaleX,
+            scaleY,
+            rotateZ,
+          }}
+          transition={{
+            background: { duration: 0.7, ease: 'easeOut' },
+            boxShadow: { duration: 0.7, ease: 'easeOut' },
+            scaleX: absOffset === 0 ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
+            scaleY: absOffset === 0 ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
+            rotateZ: absOffset === 0 ? { type: 'spring', stiffness: 400, damping: 20 } : { duration: 0.05 },
+          }}
+        >
+          {/* Inner glow overlay */}
+          <motion.div
+            className="absolute inset-0 rounded-full"
+            animate={{
+              background: `radial-gradient(circle at 50% 50%, transparent 55%, ${secondary}18 100%)`,
+            }}
+            transition={{ duration: 0.7, ease: 'easeOut' }}
+          />
+        </motion.div>
+
+        {/* Click ripples */}
+        <AnimatePresence>
+          {ripples.map((r) => (
+            <motion.div
+              key={r.id}
+              className="absolute top-1/2 left-1/2 rounded-full pointer-events-none"
+              style={{
+                width: 32,
+                height: 32,
+                marginLeft: -16,
+                marginTop: -16,
+                background: `radial-gradient(circle, ${primary}60 0%, transparent 70%)`,
+              }}
+              initial={{ scale: 0, x: r.x, y: r.y, opacity: 0.8 }}
+              animate={{ scale: 10, x: r.x, y: r.y, opacity: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.7, ease: 'easeOut' }}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
+
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-7 h-7 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
@@ -194,23 +298,48 @@ function FallbackOrb({ isPlaying, isLoading }: { isPlaying: boolean; isLoading: 
   );
 }
 
+/* ─── Main Component ─── */
+
 export function MoodOrb() {
   const [mounted, setMounted] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
-  const { isPlaying, isLoading, pause } = useAudioStore();
+  const { isPlaying, isLoading, pause, currentTrack } = useAudioStore();
 
-  // Swipe detection ref
+  // Swipe detection
   const swipeRef = useRef<{ startX: number; startY: number; tracking: boolean }>({
     startX: 0,
     startY: 0,
     tracking: false,
   });
 
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragRafRef = useRef(0);
+
+  // Pulse animation trigger on song change
+  const [pulseKey, setPulseKey] = useState(0);
+  useEffect(() => {
+    if (currentTrack) {
+      setPulseKey((k) => k + 1);
+    }
+  }, [currentTrack?.neteaseId, currentTrack?.name]);
+
+  // Click ripples
+  const [ripples, setRipples] = useState<Ripple[]>([]);
+  const addRipple = (e: React.MouseEvent | React.PointerEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    const id = Date.now() + Math.random();
+    setRipples((prev) => [...prev, { id, x, y }]);
+    setTimeout(() => {
+      setRipples((prev) => prev.filter((r) => r.id !== id));
+    }, 800);
+  };
+
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
       setMounted(true);
-      // Force CSS fallback on small screens and touch devices —
-      // WebGL is unreliable on many mobile browsers and high-DPI screens
       const isSmallScreen = window.innerWidth < 768;
       const isTouch = navigator.maxTouchPoints > 0;
       if (isSmallScreen || isTouch) {
@@ -228,7 +357,8 @@ export function MoodOrb() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    addRipple(e);
     if (isPlaying) {
       pause();
     } else {
@@ -238,8 +368,6 @@ export function MoodOrb() {
 
   const SWIPE_THRESHOLD = 50;
   const VERTICAL_TOLERANCE = 30;
-  const [dragOffset, setDragOffset] = useState(0);
-  const dragRafRef = useRef(0);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     swipeRef.current = {
@@ -255,9 +383,7 @@ export function MoodOrb() {
     const dx = e.clientX - swipeRef.current.startX;
     const dy = e.clientY - swipeRef.current.startY;
 
-    // Only respond to mostly-horizontal drags
     if (Math.abs(dx) > Math.abs(dy)) {
-      // Dampen the visual follow so it doesn't fly off-screen
       const damped = dx * 0.4;
       if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current);
       dragRafRef.current = requestAnimationFrame(() => setDragOffset(damped));
@@ -274,7 +400,6 @@ export function MoodOrb() {
     const dy = e.clientY - swipeRef.current.startY;
 
     if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dy) < VERTICAL_TOLERANCE) {
-      // Horizontal swipe detected — drift to next track
       window.dispatchEvent(new CustomEvent('moodrift:request-drift'));
     }
   };
@@ -295,28 +420,39 @@ export function MoodOrb() {
     onPointerLeave: handlePointerUp,
   };
 
-  const dragStyle: React.CSSProperties = {
-    transform: `translateX(${dragOffset}px)`,
-    transition: dragOffset === 0 ? 'transform 0.3s ease-out' : 'none',
-  };
-
   if (useFallback) {
     return (
-      <div
+      <motion.div
         className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center cursor-pointer touch-pan-y select-none"
         {...orbHandlers}
-        style={dragStyle}
+        animate={{ x: dragOffset }}
+        transition={
+          dragOffset === 0
+            ? { type: 'spring', stiffness: 400, damping: 28, mass: 0.8 }
+            : { duration: 0 }
+        }
       >
-        <FallbackOrb isPlaying={isPlaying} isLoading={isLoading} />
-      </div>
+        <FallbackOrb
+          isPlaying={isPlaying}
+          isLoading={isLoading}
+          dragOffset={dragOffset}
+          pulseKey={pulseKey}
+          ripples={ripples}
+        />
+      </motion.div>
     );
   }
 
   return (
-    <div
+    <motion.div
       className="w-full h-[32vh] md:h-[38vh] relative cursor-pointer touch-pan-y select-none"
       {...orbHandlers}
-      style={dragStyle}
+      animate={{ x: dragOffset }}
+      transition={
+        dragOffset === 0
+          ? { type: 'spring', stiffness: 400, damping: 28, mass: 0.8 }
+          : { duration: 0 }
+      }
     >
       <Canvas
         camera={{ position: [0, 0, 4], fov: 45 }}
@@ -328,6 +464,6 @@ export function MoodOrb() {
           <Scene isLoading={isLoading} />
         </Suspense>
       </Canvas>
-    </div>
+    </motion.div>
   );
 }

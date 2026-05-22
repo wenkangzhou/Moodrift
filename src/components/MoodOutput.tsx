@@ -197,10 +197,10 @@ export function MoodOutput() {
       <AnimatePresence mode="wait">
         <motion.div
           key={currentSong?.id ?? 'empty'}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
+          initial={{ opacity: 0, y: 12, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -8, scale: 0.96 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         >
           {/* Album cover - REMOVED */}
           {/*
@@ -231,10 +231,10 @@ export function MoodOutput() {
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={atmosphere?.title ?? currentSong?.name ?? 'ready'}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, y: 8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.98 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >
               <h2 className="text-xl md:text-2xl font-medium tracking-tight text-foreground mb-1">
                 {showTitle || t('output.ready')}
@@ -262,7 +262,7 @@ export function MoodOutput() {
                 className="flex items-center justify-center gap-2 mb-2 flex-wrap"
                 variants={{
                   hidden: {},
-                  visible: { transition: { staggerChildren: 0.04 } },
+                  visible: { transition: { staggerChildren: 0.06 } },
                 }}
                 initial="hidden"
                 animate="visible"
@@ -305,9 +305,9 @@ export function MoodOutput() {
           {/* Single action button */}
           <motion.div
             className="flex items-center justify-center gap-2"
-            initial={{ opacity: 0, y: 4 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.15, ease: 'easeOut' }}
+            transition={{ duration: 0.4, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
           >
             <button
               onClick={(e) => {
@@ -337,9 +337,9 @@ export function MoodOutput() {
           {/* AI Curate button */}
           <motion.div
             className="flex items-center justify-center mt-2"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.25 }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
           >
             <button
               onClick={(e) => {
@@ -379,9 +379,9 @@ export function MoodOutput() {
 
           {/* Source badge */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: currentTrack ? 1 : 0 }}
-            transition={{ duration: 0.4, delay: 0.3 }}
+            initial={{ opacity: 0, y: 2 }}
+            animate={{ opacity: currentTrack ? 1 : 0, y: currentTrack ? 0 : 2 }}
+            transition={{ duration: 0.4, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
           >
             {currentTrack && (
               <p className="text-[9px] text-muted-foreground/40 mt-1">

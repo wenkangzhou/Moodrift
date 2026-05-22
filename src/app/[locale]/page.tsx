@@ -8,6 +8,30 @@ import { BackgroundFlow } from '@/components/BackgroundFlow';
 import { MoodOrb } from '@/components/MoodOrb';
 import { MoodOutput } from '@/components/MoodOutput';
 
+const container = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.18,
+      delayChildren: 0.3,
+    },
+  },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 16, scale: 0.97 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.9,
+      ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
+    },
+  },
+};
+
 export default function HomePage() {
   const { t } = useTranslation('common');
 
@@ -16,13 +40,15 @@ export default function HomePage() {
       <MoodBackground />
       <BackgroundFlow />
 
-      {/* Content — single screen, centered, compact */}
-      <div className="relative z-10 h-full flex flex-col items-center justify-center px-4 py-4 gap-3 md:gap-4">
-        {/* Header */}
+      <motion.div
+        className="relative z-10 h-full flex flex-col items-center justify-center px-4 py-4 gap-3 md:gap-4"
+        variants={container}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* Header — logo + name */}
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.2, ease: 'easeOut' }}
+          variants={item}
           className="flex items-center justify-center gap-2 shrink-0"
         >
           <Image
@@ -38,25 +64,30 @@ export default function HomePage() {
           </h1>
         </motion.div>
 
+        {/* Tagline */}
         <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1.5, delay: 0.4 }}
+          variants={item}
           className="text-[10px] tracking-wider text-muted-foreground/60 shrink-0"
         >
           {t('appTagline')}
         </motion.p>
 
-        {/* Orb — click to play/pause */}
-        <div className="shrink-0 scale-90 md:scale-100">
+        {/* Orb */}
+        <motion.div
+          variants={item}
+          className="shrink-0 scale-90 md:scale-100"
+        >
           <MoodOrb />
-        </div>
+        </motion.div>
 
-        {/* Output — title, tags, playback status */}
-        <div className="w-full max-w-md shrink-0">
+        {/* Output — title, tags, controls */}
+        <motion.div
+          variants={item}
+          className="w-full max-w-md shrink-0"
+        >
           <MoodOutput />
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </main>
   );
 }
