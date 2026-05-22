@@ -179,115 +179,109 @@ function FallbackOrb({
   const rotateZ = dragOffset * 0.015;
 
   return (
-    <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center">
-      {/* Ambient float wrapper */}
-      <div className="absolute inset-0 animate-float">
-        {/* Pulse ring on song change */}
-        <AnimatePresence>
-          {pulseKey > 0 && (
-            <motion.div
-              key={pulseKey}
-              className="absolute inset-0 rounded-full pointer-events-none"
-              style={{
-                border: `2px solid ${primary}`,
-                boxShadow: `0 0 20px ${primary}60`,
-              }}
-              initial={{ scale: 0.4, opacity: 0.6 }}
-              animate={{ scale: 2.8, opacity: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.8, ease: 'easeOut' }}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Glow layer */}
+    <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center animate-float">
+      {/* Pulse ring on song change — key change triggers animation */}
+      {pulseKey > 0 && (
         <motion.div
-          className="absolute inset-0 rounded-full blur-3xl"
+          key={pulseKey}
+          className="absolute inset-0 rounded-full pointer-events-none"
+          style={{
+            border: `2px solid ${primary}`,
+            boxShadow: `0 0 20px ${primary}60`,
+          }}
+          initial={{ scale: 0.4, opacity: 0.6 }}
+          animate={{ scale: 2.8, opacity: 0 }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+        />
+      )}
+
+      {/* Glow layer */}
+      <motion.div
+        className="absolute inset-0 rounded-full blur-3xl"
+        animate={{
+          background: `radial-gradient(circle, ${primary}${glowOpacity} 0%, transparent 70%)`,
+        }}
+        transition={{ duration: 0.7, ease: 'easeOut' }}
+        style={{
+          animation: isLoading
+            ? 'pulse-glow 0.6s ease-in-out infinite alternate'
+            : isPlaying
+              ? 'pulse-glow 1.5s ease-in-out infinite alternate'
+              : 'pulse-glow 3s ease-in-out infinite alternate',
+        }}
+      />
+
+      {/* Drag trail — appears behind orb when swiping */}
+      <AnimatePresence>
+        {absOffset > 8 && (
+          <motion.div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl pointer-events-none"
+            style={{
+              width: '35%',
+              height: '35%',
+              background: `radial-gradient(circle, ${secondary}80 0%, transparent 70%)`,
+            }}
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{
+              x: -dragOffset * 0.2,
+              opacity: Math.min(absOffset / 60, 0.45),
+              scaleX,
+              scaleY,
+            }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ duration: 0.15 }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Orb body */}
+      <motion.div
+        className="relative w-48 h-48 md:w-60 md:h-60 rounded-full"
+        animate={{
+          background: `radial-gradient(circle at 35% 35%, ${primary} 0%, ${secondary}${bodyOpacity} 50%, ${primary}20 100%)`,
+          boxShadow: `0 0 ${shadowSpread} ${primary}${shadowOpacity}`,
+          scaleX,
+          scaleY,
+          rotateZ,
+        }}
+        transition={{
+          background: { duration: 0.7, ease: 'easeOut' },
+          boxShadow: { duration: 0.7, ease: 'easeOut' },
+          scaleX: absOffset === 0 ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
+          scaleY: absOffset === 0 ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
+          rotateZ: absOffset === 0 ? { type: 'spring', stiffness: 400, damping: 20 } : { duration: 0.05 },
+        }}
+      >
+        {/* Inner glow overlay */}
+        <motion.div
+          className="absolute inset-0 rounded-full"
           animate={{
-            background: `radial-gradient(circle, ${primary}${glowOpacity} 0%, transparent 70%)`,
+            background: `radial-gradient(circle at 50% 50%, transparent 55%, ${secondary}18 100%)`,
           }}
           transition={{ duration: 0.7, ease: 'easeOut' }}
-          style={{
-            animation: isLoading
-              ? 'pulse-glow 0.6s ease-in-out infinite alternate'
-              : isPlaying
-                ? 'pulse-glow 1.5s ease-in-out infinite alternate'
-                : 'pulse-glow 3s ease-in-out infinite alternate',
-          }}
         />
+      </motion.div>
 
-        {/* Drag trail — appears behind orb when swiping */}
-        <AnimatePresence>
-          {absOffset > 8 && (
-            <motion.div
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl pointer-events-none"
-              style={{
-                width: '35%',
-                height: '35%',
-                background: `radial-gradient(circle, ${secondary}80 0%, transparent 70%)`,
-              }}
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{
-                x: -dragOffset * 0.2,
-                opacity: Math.min(absOffset / 60, 0.45),
-                scaleX,
-                scaleY,
-              }}
-              exit={{ opacity: 0, scale: 0.5 }}
-              transition={{ duration: 0.15 }}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Orb body */}
-        <motion.div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 md:w-60 md:h-60 rounded-full overflow-hidden"
-          animate={{
-            background: `radial-gradient(circle at 35% 35%, ${primary} 0%, ${secondary}${bodyOpacity} 50%, ${primary}20 100%)`,
-            boxShadow: `0 0 ${shadowSpread} ${primary}${shadowOpacity}`,
-            scaleX,
-            scaleY,
-            rotateZ,
-          }}
-          transition={{
-            background: { duration: 0.7, ease: 'easeOut' },
-            boxShadow: { duration: 0.7, ease: 'easeOut' },
-            scaleX: absOffset === 0 ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
-            scaleY: absOffset === 0 ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
-            rotateZ: absOffset === 0 ? { type: 'spring', stiffness: 400, damping: 20 } : { duration: 0.05 },
-          }}
-        >
-          {/* Inner glow overlay */}
+      {/* Click ripples */}
+      <AnimatePresence>
+        {ripples.map((r) => (
           <motion.div
-            className="absolute inset-0 rounded-full"
-            animate={{
-              background: `radial-gradient(circle at 50% 50%, transparent 55%, ${secondary}18 100%)`,
+            key={r.id}
+            className="absolute top-1/2 left-1/2 rounded-full pointer-events-none"
+            style={{
+              width: 32,
+              height: 32,
+              marginLeft: -16,
+              marginTop: -16,
+              background: `radial-gradient(circle, ${primary}60 0%, transparent 70%)`,
             }}
+            initial={{ scale: 0, x: r.x, y: r.y, opacity: 0.8 }}
+            animate={{ scale: 10, x: r.x, y: r.y, opacity: 0 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.7, ease: 'easeOut' }}
           />
-        </motion.div>
-
-        {/* Click ripples */}
-        <AnimatePresence>
-          {ripples.map((r) => (
-            <motion.div
-              key={r.id}
-              className="absolute top-1/2 left-1/2 rounded-full pointer-events-none"
-              style={{
-                width: 32,
-                height: 32,
-                marginLeft: -16,
-                marginTop: -16,
-                background: `radial-gradient(circle, ${primary}60 0%, transparent 70%)`,
-              }}
-              initial={{ scale: 0, x: r.x, y: r.y, opacity: 0.8 }}
-              animate={{ scale: 10, x: r.x, y: r.y, opacity: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.7, ease: 'easeOut' }}
-            />
-          ))}
-        </AnimatePresence>
-      </div>
+        ))}
+      </AnimatePresence>
 
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -305,7 +299,7 @@ export function MoodOrb() {
   const [useFallback, setUseFallback] = useState(false);
   const { isPlaying, isLoading, pause, currentTrack } = useAudioStore();
 
-  // Swipe detection
+  // Swipe detection ref
   const swipeRef = useRef<{ startX: number; startY: number; tracking: boolean }>({
     startX: 0,
     startY: 0,
@@ -424,7 +418,6 @@ export function MoodOrb() {
     return (
       <motion.div
         className="w-full h-[32vh] md:h-[38vh] flex items-center justify-center cursor-pointer touch-pan-y select-none"
-        {...orbHandlers}
         animate={{ x: dragOffset }}
         transition={
           dragOffset === 0
@@ -432,13 +425,15 @@ export function MoodOrb() {
             : { duration: 0 }
         }
       >
-        <FallbackOrb
-          isPlaying={isPlaying}
-          isLoading={isLoading}
-          dragOffset={dragOffset}
-          pulseKey={pulseKey}
-          ripples={ripples}
-        />
+        <div {...orbHandlers}>
+          <FallbackOrb
+            isPlaying={isPlaying}
+            isLoading={isLoading}
+            dragOffset={dragOffset}
+            pulseKey={pulseKey}
+            ripples={ripples}
+          />
+        </div>
       </motion.div>
     );
   }
@@ -446,7 +441,6 @@ export function MoodOrb() {
   return (
     <motion.div
       className="w-full h-[32vh] md:h-[38vh] relative cursor-pointer touch-pan-y select-none"
-      {...orbHandlers}
       animate={{ x: dragOffset }}
       transition={
         dragOffset === 0
@@ -454,16 +448,18 @@ export function MoodOrb() {
           : { duration: 0 }
       }
     >
-      <Canvas
-        camera={{ position: [0, 0, 4], fov: 45 }}
-        dpr={[1, 2]}
-        gl={{ antialias: true, alpha: true }}
-        onError={() => setUseFallback(true)}
-      >
-        <Suspense fallback={null}>
-          <Scene isLoading={isLoading} />
-        </Suspense>
-      </Canvas>
+      <div className="absolute inset-0" {...orbHandlers}>
+        <Canvas
+          camera={{ position: [0, 0, 4], fov: 45 }}
+          dpr={[1, 2]}
+          gl={{ antialias: true, alpha: true }}
+          onError={() => setUseFallback(true)}
+        >
+          <Suspense fallback={null}>
+            <Scene isLoading={isLoading} />
+          </Suspense>
+        </Canvas>
+      </div>
     </motion.div>
   );
 }
