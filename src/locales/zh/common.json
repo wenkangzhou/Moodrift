@@ -1,6 +1,6 @@
 {
   "appName": "Moodrift",
-  "appTagline": "随机切歌，AI 为你解读每首的氛围",
+  "appTagline": "进入此刻的氛围",
   "loading": "加载中...",
   "switchLang": "EN",
   "theme": {
@@ -8,40 +8,21 @@
     "dark": "深色",
     "system": "跟随系统"
   },
-  "controls": {
-    "energy": "能量",
-    "environment": "环境",
-    "activity": "活动",
-    "emotion": "情绪",
-    "calm": "平静",
-    "intense": "强烈"
-  },
-  "environments": {
-    "rain": "雨天",
-    "city": "城市",
-    "mountain": "山野",
-    "night": "深夜",
-    "sunset": "日落"
-  },
-  "activities": {
-    "run": "奔跑",
-    "walk": "漫步",
-    "focus": "专注",
-    "work": "工作",
-    "drive": "驾驶"
-  },
-  "emotions": {
-    "lonely": "孤独",
-    "dreamy": "梦幻",
-    "happy": "愉悦",
-    "melancholy": "忧郁"
+  "error": {
+    "title": "出错了",
+    "description": "页面加载失败，请检查网络后重试。",
+    "retry": "重试"
   },
   "output": {
     "atmosphere": "氛围",
     "bpm": "BPM",
     "recommended": "推荐音乐",
     "ready": "正在挑选音乐…",
+    "entering": "进入中…",
     "listening": "正在聆听氛围…",
+    "suspended": "氛围悬停…",
+    "untitled": "未知频率",
+    "unknownArtist": "Moodrift Signal",
     "play": "沉浸",
     "drift": "漂移",
     "next": "下一首",

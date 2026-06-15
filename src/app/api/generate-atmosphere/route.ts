@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerCache, setServerCache, stableKey, type ServerCache } from '@/lib/server-cache';
 
 const MOONSHOT_API_KEY = process.env.MOONSHOT_API_KEY;
 const MOONSHOT_API_URL = 'https://api.moonshot.cn/v1/chat/completions';
+const MAX_BATCH_TRACKS = 3;
+const MAX_FIELD_LENGTH = 120;
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const KIMI_TIMEOUT_MS = 12_000;
+
+const atmosphereCache: ServerCache<AtmosphereData> = new Map();
 
 interface TrackRef {
   name: string;
@@ -27,13 +34,40 @@ interface AtmosphereData {
   tags: string[];
 }
 
+function cacheKey(track: TrackRef, locale: string) {
+  return stableKey(['atmosphere', locale, track.name, track.artist]);
+}
+
+function cleanText(value: unknown) {
+  return typeof value === 'string'
+    ? value.trim().slice(0, MAX_FIELD_LENGTH)
+    : '';
+}
+
+function normalizeLocale(value: unknown) {
+  return value === 'en' ? 'en' : 'zh';
+}
+
+function normalizeTrack(value: unknown): TrackRef | null {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Record<string, unknown>;
+  const name = cleanText(item.name);
+  const artist = cleanText(item.artist);
+  if (!name || !artist) return null;
+  return { name, artist };
+}
+
 async function callKimi(prompt: string, maxTokens: number): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), KIMI_TIMEOUT_MS);
+
   const response = await fetch(MOONSHOT_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${MOONSHOT_API_KEY}`,
     },
+    signal: controller.signal,
     body: JSON.stringify({
       model: 'kimi-k2.5',
       messages: [
@@ -48,7 +82,7 @@ async function callKimi(prompt: string, maxTokens: number): Promise<string> {
       max_tokens: maxTokens,
       thinking: { type: 'disabled' },
     }),
-  });
+  }).finally(() => clearTimeout(timeoutId));
 
   if (!response.ok) {
     const error = await response.text();
@@ -212,32 +246,82 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json();
-  const { locale, tracks } = body;
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const { tracks } = body as Record<string, unknown>;
+  const locale = normalizeLocale((body as Record<string, unknown>).locale);
 
   try {
     if (tracks && Array.isArray(tracks) && tracks.length > 0) {
       // Batch mode
-      const prompt = buildBatchPrompt(tracks as TrackRef[], locale);
-      const content = await callKimi(prompt, 16384);
-      const results = parseBatchResponse(content, tracks.length);
+      const normalizedTracks = tracks
+        .slice(0, MAX_BATCH_TRACKS)
+        .map(normalizeTrack)
+        .filter((track): track is TrackRef => Boolean(track));
+
+      if (normalizedTracks.length === 0) {
+        return NextResponse.json({ error: 'No valid tracks provided' }, { status: 400 });
+      }
+
+      const results: AtmosphereData[] = [];
+      const uncached: Array<{ index: number; track: TrackRef }> = [];
+
+      normalizedTracks.forEach((track, index) => {
+        const cached = getServerCache(atmosphereCache, cacheKey(track, locale));
+        if (cached) {
+          results[index] = cached;
+        } else {
+          uncached.push({ index, track });
+        }
+      });
+
+      if (uncached.length > 0) {
+        const prompt = buildBatchPrompt(uncached.map((item) => item.track), locale);
+        const maxTokens = 2048 + uncached.length * 768;
+        const content = await callKimi(prompt, maxTokens);
+        const freshResults = parseBatchResponse(content, uncached.length);
+
+        uncached.forEach((item, i) => {
+          const data = freshResults[i];
+          results[item.index] = data;
+          setServerCache(atmosphereCache, cacheKey(item.track, locale), data, CACHE_TTL);
+        });
+      }
+
       return NextResponse.json(results);
     }
 
     // Single mode
-    const { trackName, artist } = body;
-    if (!trackName || !artist) {
+    const track = normalizeTrack({
+      name: (body as Record<string, unknown>).trackName,
+      artist: (body as Record<string, unknown>).artist,
+    });
+    if (!track) {
       return NextResponse.json(
         { error: 'Missing trackName/artist or tracks array' },
         { status: 400 }
       );
     }
 
-    const prompt = buildSinglePrompt(trackName, artist, locale);
-    const content = await callKimi(prompt, 8192);
-    const parsed = parseJsonFromContent(content) as Record<string, unknown>;
+    const cached = getServerCache(atmosphereCache, cacheKey(track, locale));
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: { 'x-moodrift-cache': 'hit' },
+      });
+    }
 
-    return NextResponse.json(normalizeAtmosphere(parsed));
+    const prompt = buildSinglePrompt(track.name, track.artist, locale);
+    const content = await callKimi(prompt, 2048);
+    const parsed = parseJsonFromContent(content) as Record<string, unknown>;
+    const result = normalizeAtmosphere(parsed);
+    setServerCache(atmosphereCache, cacheKey(track, locale), result, CACHE_TTL);
+
+    return NextResponse.json(result, {
+      headers: { 'x-moodrift-cache': 'miss' },
+    });
   } catch (err) {
     console.error('[generate-atmosphere] Error:', err);
     return NextResponse.json(

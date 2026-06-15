@@ -1,4 +1,5 @@
 import { noteToFreq, type ScaleName } from './music-theory';
+import { logger } from './logger';
 
 export interface SynthVoice {
   type: OscillatorType;
@@ -46,6 +47,13 @@ export class GenerativePlayer {
     return this.ctx;
   }
 
+  private closeContext(ctx: AudioContext) {
+    if (this.ctx === ctx) {
+      this.ctx = null;
+    }
+    ctx.close().catch(() => {});
+  }
+
   play(track: GenerativeTrack, onEnded?: () => void) {
     this.stop(true);
     this.onEnded = onEnded;
@@ -54,7 +62,7 @@ export class GenerativePlayer {
 
     if (ctx.state === 'suspended') {
       ctx.resume().catch((err) => {
-        console.warn('[GenerativePlayer] AudioContext resume failed:', err);
+        logger.warn('[GenerativePlayer] AudioContext resume failed:', err);
       });
     }
 
@@ -140,6 +148,7 @@ export class GenerativePlayer {
       });
       masterGain.disconnect();
       onEnded?.();
+      this.closeContext(ctx);
       return;
     }
 
@@ -162,6 +171,7 @@ export class GenerativePlayer {
       });
       masterGain.disconnect();
       onEnded?.();
+      this.closeContext(ctx);
     }, 500);
   }
 

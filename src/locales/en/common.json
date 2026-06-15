@@ -1,6 +1,6 @@
 {
   "appName": "Moodrift",
-  "appTagline": "Shuffle music. AI reads the mood of each track.",
+  "appTagline": "A space for your current mood.",
   "loading": "Loading...",
   "switchLang": "中",
   "theme": {
@@ -8,40 +8,21 @@
     "dark": "Dark",
     "system": "System"
   },
-  "controls": {
-    "energy": "Energy",
-    "environment": "Environment",
-    "activity": "Activity",
-    "emotion": "Emotion",
-    "calm": "Calm",
-    "intense": "Intense"
-  },
-  "environments": {
-    "rain": "Rain",
-    "city": "City",
-    "mountain": "Mountain",
-    "night": "Night",
-    "sunset": "Sunset"
-  },
-  "activities": {
-    "run": "Run",
-    "walk": "Walk",
-    "focus": "Focus",
-    "work": "Work",
-    "drive": "Drive"
-  },
-  "emotions": {
-    "lonely": "Lonely",
-    "dreamy": "Dreamy",
-    "happy": "Happy",
-    "melancholy": "Melancholy"
+  "error": {
+    "title": "Something went wrong",
+    "description": "Failed to load the page. Please check your connection and try again.",
+    "retry": "Retry"
   },
   "output": {
     "atmosphere": "Atmosphere",
     "bpm": "BPM",
     "recommended": "Recommended",
     "ready": "Picking music…",
+    "entering": "Entering…",
     "listening": "Listening to the vibe…",
+    "suspended": "Atmosphere suspended…",
+    "untitled": "Unknown Frequency",
+    "unknownArtist": "Moodrift Signal",
     "play": "Immerse",
     "drift": "Drift",
     "next": "Next",

@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { playlistCatalog } from '@/lib/netease';
+import { getServerCache, setServerCache, stableKey, type ServerCache } from '@/lib/server-cache';
 
 const MOONSHOT_API_KEY = process.env.MOONSHOT_API_KEY;
 const MOONSHOT_API_URL = 'https://api.moonshot.cn/v1/chat/completions';
+const CURATE_CACHE_TTL = 24 * 60 * 60 * 1000;
+const KIMI_TIMEOUT_MS = 12_000;
+
+interface CurateResponse {
+  playlistIds: number[];
+  title: string;
+  description: string;
+}
+
+const curateCache: ServerCache<CurateResponse> = new Map();
 
 function buildCatalogText(): string {
   return Object.entries(playlistCatalog)
@@ -18,7 +29,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { environment, activity, emotion, energy, locale } = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const raw = body as Record<string, unknown>;
+  const locale = raw.locale === 'en' ? 'en' : 'zh';
+  const environment = typeof raw.environment === 'string' ? raw.environment.slice(0, 40) : undefined;
+  const activity = typeof raw.activity === 'string' ? raw.activity.slice(0, 40) : undefined;
+  const emotion = typeof raw.emotion === 'string' ? raw.emotion.slice(0, 40) : undefined;
+  const energy = typeof raw.energy === 'number'
+    ? Math.max(0, Math.min(100, Math.round(raw.energy)))
+    : 50;
+  const cacheKey = stableKey(['curate', locale, environment, activity, emotion, energy]);
+  const cached = getServerCache(curateCache, cacheKey);
+  if (cached) {
+    return NextResponse.json(cached, {
+      headers: { 'x-moodrift-cache': 'hit' },
+    });
+  }
+
   const catalog = buildCatalogText();
   const validIds = Object.keys(playlistCatalog).map(Number);
 
@@ -56,12 +87,15 @@ Return ONLY the following JSON format, no other text:
 {"playlistIds":[...],"title":"...","description":"..."}`;
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), KIMI_TIMEOUT_MS);
     const response = await fetch(MOONSHOT_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${MOONSHOT_API_KEY}`,
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'kimi-k2.5',
         messages: [
@@ -78,7 +112,7 @@ Return ONLY the following JSON format, no other text:
         max_tokens: 4096,
         thinking: { type: 'disabled' },
       }),
-    });
+    }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
       const error = await response.text();
@@ -116,11 +150,13 @@ Return ONLY the following JSON format, no other text:
 
     if (!parsed) {
       console.warn('[curate] Failed to parse Kimi response, using defaults. Raw:', raw.slice(0, 200));
-      return NextResponse.json({
+      const fallback: CurateResponse = {
         playlistIds: [],
         title: '',
         description: '',
-      });
+      };
+      setServerCache(curateCache, cacheKey, fallback, CURATE_CACHE_TTL);
+      return NextResponse.json(fallback);
     }
 
     const rawIds = Array.isArray(parsed.playlistIds) ? parsed.playlistIds : [];
@@ -128,10 +164,14 @@ Return ONLY the following JSON format, no other text:
       .map((id: unknown) => (typeof id === 'string' ? parseInt(id, 10) : Number(id)))
       .filter((id: number) => validIds.includes(id));
 
-    return NextResponse.json({
+    const result: CurateResponse = {
       playlistIds,
       title: typeof parsed.title === 'string' ? parsed.title : '',
       description: typeof parsed.description === 'string' ? parsed.description : '',
+    };
+    setServerCache(curateCache, cacheKey, result, CURATE_CACHE_TTL);
+    return NextResponse.json(result, {
+      headers: { 'x-moodrift-cache': 'miss' },
     });
   } catch (err) {
     return NextResponse.json(

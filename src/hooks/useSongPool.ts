@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { fetchPlaylistTracks, checkNeteaseUrls, type NeteaseTrack } from '@/lib/netease';
 import { type AtmosphereData, getCached, setCached } from '@/hooks/useAtmosphere';
+import { logger } from '@/lib/logger';
 
 interface SongWithAtmosphere extends NeteaseTrack {
   atmosphere?: AtmosphereData;
@@ -99,8 +100,9 @@ const POOL_SIZE = 20;
 const INITIAL_PLAYLIST_BATCH = 2;
 const EXPAND_PLAYLIST_BATCH = 3;
 const MIN_POOL_SIZE = 5;
+const ATMOSPHERE_PREFETCH_LIMIT = 3;
 
-export function useSongPool(locale: string, playlistIds?: number[]) {
+export function useSongPool(locale: string, playlistIds?: number[], enableAtmosphere = false) {
   const [songs, setSongs] = useState<SongWithAtmosphere[]>([]);
   const [index, setIndex] = useState(0);
   const [poolLoading, setPoolLoading] = useState(false);
@@ -109,8 +111,13 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
   const prevPlaylistKeyRef = useRef<string>('');
   const prefetchedIdsRef = useRef<Set<number>>(new Set());
   const retriedIdsRef = useRef<Set<number>>(new Set());
+  const hasSongsRef = useRef(false);
 
   const playlistIdsKey = playlistIds?.join(',') ?? '';
+
+  useEffect(() => {
+    hasSongsRef.current = songs.length > 0;
+  }, [songs.length]);
 
   const updateSongAtmosphere = useCallback(
     (songId: number, atmosphere?: AtmosphereData, status: SongWithAtmosphere['atmosphereStatus'] = 'done') => {
@@ -125,7 +132,9 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
     async (tracks: NeteaseTrack[]) => {
       // Cap batch size — AI token limit can't handle hundreds at once.
       // The rest are fetched on-demand when the user reaches them.
-      const BATCH_LIMIT = 20;
+      if (!enableAtmosphere) return;
+
+      const BATCH_LIMIT = ATMOSPHERE_PREFETCH_LIMIT;
       const toProcess = tracks.slice(0, BATCH_LIMIT);
 
       // 1. Apply cached results immediately, collect uncached
@@ -160,11 +169,11 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
         uncached.forEach((t) => updateSongAtmosphere(t.id, undefined, 'error'));
       }
     },
-    [locale, updateSongAtmosphere]
+    [enableAtmosphere, locale, updateSongAtmosphere]
   );
 
   const loadPool = useCallback(async (): Promise<SongWithAtmosphere[]> => {
-    const isFirstLoad = songs.length === 0;
+    const isFirstLoad = !hasSongsRef.current;
     setPoolLoading(true);
     setPoolError(null);
 
@@ -214,11 +223,15 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
     setPoolLoading(false);
     prefetchedIdsRef.current.clear();
     retriedIdsRef.current.clear();
-    console.log('[useSongPool] Pool ready with', newSongs.length, 'valid tracks');
+    logger.log('[useSongPool] Pool ready with', newSongs.length, 'valid tracks');
 
-    // Step 3: Prefetch atmospheres for the initial pool in one batch
-    validTracks.forEach((t) => prefetchedIdsRef.current.add(t.id));
-    prefetchAtmospheres(validTracks);
+    // Step 3: Defer AI atmosphere generation until the user starts listening.
+    // Loading the app should not spend Kimi tokens for a whole pool.
+    if (enableAtmosphere) {
+      const initialAtmosphereTracks = validTracks.slice(0, ATMOSPHERE_PREFETCH_LIMIT);
+      initialAtmosphereTracks.forEach((t) => prefetchedIdsRef.current.add(t.id));
+      prefetchAtmospheres(initialAtmosphereTracks);
+    }
 
     // Step 4: Expand pool with more tracks in background
     const remainingIds = shuffle(targetPool)
@@ -239,14 +252,14 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
             .slice(0, POOL_SIZE - prev.length)
             .map((t) => ({ ...t, atmosphereStatus: 'idle' as const }));
           if (newOnes.length === 0) return prev;
-          console.log('[useSongPool] Expanded pool with', newOnes.length, 'valid tracks');
+          logger.log('[useSongPool] Expanded pool with', newOnes.length, 'valid tracks');
           return [...prev, ...newOnes];
         });
       });
     }
 
     return newSongs;
-  }, [playlistIds, prefetchAtmospheres, songs.length]);
+  }, [enableAtmosphere, playlistIds, prefetchAtmospheres]);
 
   // Auto-load on mount
   useEffect(() => {
@@ -274,6 +287,7 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
   // Also retry failed atmospheres once per pool.
   useEffect(() => {
     const song = songs[index];
+    if (!enableAtmosphere) return;
     if (!song) return;
     const canFetch =
       song.atmosphereStatus === 'idle' ||
@@ -287,11 +301,11 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
     fetchAtmosphereForSong(song, locale).then(({ data, error }) => {
       updateSongAtmosphere(song.id, data, error ? 'error' : 'done');
     });
-  }, [index, songs, locale, updateSongAtmosphere]);
+  }, [enableAtmosphere, index, songs, locale, updateSongAtmosphere]);
 
   // Lazy batch prefetch: when user skips, look ahead for idle/error songs and batch them
   useEffect(() => {
-    if (songs.length === 0) return;
+    if (!enableAtmosphere || songs.length === 0) return;
     const idleAhead = songs
       .slice(index + 1)
       .filter((s) => {
@@ -299,7 +313,7 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
         if (s.atmosphereStatus === 'error') return !retriedIdsRef.current.has(s.id);
         return false;
       })
-      .slice(0, 20);
+      .slice(0, ATMOSPHERE_PREFETCH_LIMIT);
 
     if (idleAhead.length === 0) return;
 
@@ -315,7 +329,7 @@ export function useSongPool(locale: string, playlistIds?: number[]) {
       prefetchAtmospheres(idleAhead);
     }, 500);
     return () => clearTimeout(timer);
-  }, [index, songs, prefetchAtmospheres]);
+  }, [enableAtmosphere, index, songs, prefetchAtmospheres]);
 
   const nextSong = useCallback((): SongWithAtmosphere | null => {
     if (songs.length === 0) return null;

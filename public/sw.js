@@ -1,7 +1,7 @@
 const CACHE_NAME = 'moodrift-v3';
 const STATIC_HOST = self.location.origin;
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 

@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useAppStore } from '@/stores/useAppStore';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 const environmentGradients: Record<string, string> = {
   rain: 'radial-gradient(ellipse at 50% 20%, rgba(30,58,95,0.4) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(17,24,39,0.6) 0%, transparent 50%)',
@@ -18,7 +18,8 @@ function seededRandom(seed: number) {
 }
 
 export function MoodBackground() {
-  const environment = useAppStore((s) => s.environment);
+  const environment = 'night';
+  const reducedMotion = useReducedMotion();
 
   const overlayStyle = useMemo(() => ({
     background: environmentGradients[environment] ?? environmentGradients.night,
@@ -29,12 +30,12 @@ export function MoodBackground() {
       <div className="absolute inset-0 bg-[#0B1020]" />
 
       <motion.div
-        className="absolute inset-0 animate-drift"
+        className={`absolute inset-0 ${reducedMotion ? '' : 'animate-drift'}`}
         style={{
           background: 'linear-gradient(135deg, rgba(11,16,32,0.95) 0%, rgba(17,24,39,0.9) 25%, rgba(30,27,46,0.85) 50%, rgba(11,16,32,0.95) 75%, rgba(17,24,39,0.9) 100%)',
           backgroundSize: '400% 400%',
         }}
-        animate={{ opacity: [0.7, 1, 0.7] }}
+        animate={reducedMotion ? undefined : { opacity: [0.7, 1, 0.7] }}
         transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
       />
 
@@ -45,7 +46,7 @@ export function MoodBackground() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 2.5, ease: 'easeInOut' }}
+        transition={reducedMotion ? { duration: 0 } : { duration: 2.5, ease: 'easeInOut' }}
       />
 
       <div
@@ -55,12 +56,12 @@ export function MoodBackground() {
         }}
       />
 
-      <Particles environment={environment} />
+      <Particles environment={environment} reducedMotion={reducedMotion} />
     </div>
   );
 }
 
-function Particles({ environment }: { environment: string }) {
+function Particles({ environment, reducedMotion }: { environment: string; reducedMotion: boolean }) {
   const particleCount = environment === 'rain' ? 40 : environment === 'run' ? 60 : 25;
   const speed = environment === 'run' ? 2.5 : environment === 'rain' ? 1.8 : 1;
 
@@ -69,13 +70,13 @@ function Particles({ environment }: { environment: string }) {
       const seed = environment.charCodeAt(0) + i * 7919;
       return {
         left: seededRandom(seed) * 100,
-        delay: seededRandom(seed + 1) * 8,
-        duration: (4 + seededRandom(seed + 2) * 6) / speed,
+        delay: reducedMotion ? 0 : seededRandom(seed + 1) * 8,
+        duration: reducedMotion ? 0 : (4 + seededRandom(seed + 2) * 6) / speed,
         size: environment === 'rain' ? 1.5 : 2 + seededRandom(seed + 3) * 2,
         opacity: 0.1 + seededRandom(seed + 4) * 0.3,
       };
     });
-  }, [environment, particleCount, speed]);
+  }, [environment, particleCount, speed, reducedMotion]);
 
   return (
     <div className="absolute inset-0 pointer-events-none">
@@ -91,15 +92,15 @@ function Particles({ environment }: { environment: string }) {
               ? 'rgba(125,211,252,0.4)'
               : 'rgba(203,213,225,0.3)',
           }}
-          initial={{ top: '-5%', opacity: 0 }}
-          animate={{
+          initial={reducedMotion ? { top: `${seededRandom(i * 7919) * 100}%`, opacity: p.opacity } : { top: '-5%', opacity: 0 }}
+          animate={reducedMotion ? undefined : {
             top: '105%',
             opacity: [0, p.opacity, p.opacity, 0],
           }}
           transition={{
             duration: p.duration,
             delay: p.delay,
-            repeat: Infinity,
+            repeat: reducedMotion ? 0 : Infinity,
             ease: 'linear',
           }}
         />

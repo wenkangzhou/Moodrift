@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 const locales = ['zh', 'en'];
 const defaultLocale = 'zh';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   if (
@@ -22,9 +22,12 @@ export function middleware(request: NextRequest) {
   );
 
   if (pathnameIsMissingLocale) {
-    const locale = defaultLocale;
-    return NextResponse.redirect(new URL(`/${locale}${pathname}`, request.url));
+    return NextResponse.redirect(
+      new URL(`/${defaultLocale}${pathname}`, request.url)
+    );
   }
+
+  return NextResponse.next();
 }
 
 export const config = {

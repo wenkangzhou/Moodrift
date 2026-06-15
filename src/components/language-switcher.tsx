@@ -2,11 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAppStore } from '@/stores/useAppStore';
 
 export function LanguageSwitcher() {
   const pathname = usePathname();
-  const currentLocale = useAppStore((s) => s.locale);
+  const currentLocale = pathname.startsWith('/en') ? 'en' : 'zh';
 
   const switchLocale = currentLocale === 'zh' ? 'en' : 'zh';
 
@@ -16,7 +15,6 @@ export function LanguageSwitcher() {
     <Link
       href={targetPath || `/${switchLocale}`}
       className="text-xs font-medium tracking-widest uppercase text-muted-foreground hover:text-foreground transition-colors duration-300"
-      onClick={() => useAppStore.getState().setLocale(switchLocale)}
     >
       {switchLocale === 'zh' ? '中' : 'EN'}
     </Link>

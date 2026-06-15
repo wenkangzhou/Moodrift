@@ -3,18 +3,17 @@
 import { useRef, useEffect } from 'react';
 import { useAudioStore } from '@/stores/useAudioStore';
 import { useAtmosphereColorStore } from '@/stores/useAtmosphereColorStore';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 export function BackgroundFlow() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { isPlaying } = useAudioStore();
   const { palette } = useAtmosphereColorStore();
-  const paletteRef = useRef(palette);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
-    paletteRef.current = palette;
-  }, [palette]);
+    if (reducedMotion) return;
 
-  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -32,8 +31,7 @@ export function BackgroundFlow() {
     window.addEventListener('resize', resize);
 
     const getPalette = () => {
-      const p = paletteRef.current;
-      return p.length >= 3 ? p : ['#7DD3FC20', '#A78BFA20', '#818CF815'];
+      return palette.length >= 3 ? palette : ['#7DD3FC20', '#A78BFA20', '#818CF815'];
     };
 
     const particleCount = 65;
@@ -148,7 +146,7 @@ export function BackgroundFlow() {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
     };
-  }, [isPlaying]);
+  }, [isPlaying, palette, reducedMotion]);
 
   return (
     <canvas

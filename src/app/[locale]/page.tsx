@@ -54,7 +54,6 @@ export default function HomePage() {
           <MoodOrb />
         </div>
 
-        {/* Output — title, tags, controls */}
         <div
           className="w-full max-w-md shrink-0 animate-fade-up"
           style={{ animationDelay: '0.75s' }}

@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from 'react';
-import { useAppStore } from '@/stores/useAppStore';
 
 export interface CurateData {
   playlistIds: number[];
@@ -8,8 +7,6 @@ export interface CurateData {
 }
 
 export function useCurate(locale: string) {
-  const { environment, activity, emotion, energy } = useAppStore();
-
   const [data, setData] = useState<CurateData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +24,13 @@ export function useCurate(locale: string) {
       const res = await fetch('/api/curate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ environment, activity, emotion, energy, locale }),
+        body: JSON.stringify({
+          environment: 'night',
+          activity: 'focus',
+          emotion: 'dreamy',
+          energy: 50,
+          locale,
+        }),
         signal: abortRef.current.signal,
       });
 
@@ -46,7 +49,7 @@ export function useCurate(locale: string) {
     } finally {
       setLoading(false);
     }
-  }, [environment, activity, emotion, energy, locale]);
+  }, [locale]);
 
   return { data, loading, error, curate };
 }
