@@ -1,42 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import {
+  getCachedAtmosphere,
+  setCachedAtmosphere,
+  type AtmosphereData,
+} from '@/lib/atmosphere-cache';
 
-export interface AtmosphereData {
-  title: string;
-  description: string;
-  tags: string[];
-}
-
-const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-export function cacheKey(trackName: string, artist: string, locale: string) {
-  return `moodrift-track-${trackName}-${artist}-${locale}`;
-}
-
-export function getCached(trackName: string, artist: string, locale: string): AtmosphereData | null {
-  try {
-    const raw = localStorage.getItem(cacheKey(trackName, artist, locale));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.timestamp > CACHE_TTL) {
-      localStorage.removeItem(cacheKey(trackName, artist, locale));
-      return null;
-    }
-    return parsed.data;
-  } catch {
-    return null;
-  }
-}
-
-export function setCached(trackName: string, artist: string, locale: string, data: AtmosphereData) {
-  try {
-    localStorage.setItem(
-      cacheKey(trackName, artist, locale),
-      JSON.stringify({ data, timestamp: Date.now() })
-    );
-  } catch {
-    // storage full, ignore
-  }
-}
+export type { AtmosphereData } from '@/lib/atmosphere-cache';
 
 export function useAtmosphere(trackName: string | null, artist: string | null, locale: string) {
   const [data, setData] = useState<AtmosphereData | null>(null);
@@ -53,7 +22,7 @@ export function useAtmosphere(trackName: string | null, artist: string | null, l
     // Clear old data immediately so UI enters loading state
     setData(null);
 
-    const cached = getCached(trackName, artist, locale);
+    const cached = getCachedAtmosphere(trackName, artist, locale);
     if (cached) {
       setData(cached);
       setError(null);
@@ -83,7 +52,7 @@ export function useAtmosphere(trackName: string | null, artist: string | null, l
       }
 
       const result = await res.json();
-      setCached(trackName, artist, locale, result);
+      setCachedAtmosphere(trackName, artist, locale, result);
       setData(result);
     } catch (err) {
       clearTimeout(timeoutId);

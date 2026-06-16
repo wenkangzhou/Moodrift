@@ -1,13 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Sparkles } from 'lucide-react';
 import { useAudioStore } from '@/stores/useAudioStore';
 import { useSongPool } from '@/hooks/useSongPool';
 import { useCurate } from '@/hooks/useCurate';
-import { Badge } from '@/components/ui/badge';
 import type { NeteaseTrack } from '@/lib/netease';
 import { applyAtmosphereColors } from '@/lib/atmosphere-colors';
 import { useAtmosphereColorStore } from '@/stores/useAtmosphereColorStore';
@@ -18,13 +16,18 @@ export function MoodOutput() {
   const { t, i18n } = useTranslation('common');
   const locale = i18n.language;
   const retryPlayRef = useRef<(t?: NeteaseTrack) => void>(() => {});
-  const failCountRef = useRef(0);
+  const curateRequestedRef = useRef<string | null>(null);
   const [visualTrack, setVisualTrack] = useState<{ name: string; artist: string } | null>(null);
 
   const { data: curateData, loading: curateLoading, error: curateError, curate } = useCurate(locale);
 
-  const { currentTrack, isPlaying, isLoading: audioLoading, progress, playNetease, playGenerative, pause } =
-    useAudioStore();
+  const currentTrack = useAudioStore((s) => s.currentTrack);
+  const isPlaying = useAudioStore((s) => s.isPlaying);
+  const audioLoading = useAudioStore((s) => s.isLoading);
+  const progress = useAudioStore((s) => s.progress);
+  const playNetease = useAudioStore((s) => s.playNetease);
+  const playGenerative = useAudioStore((s) => s.playGenerative);
+  const pause = useAudioStore((s) => s.pause);
 
   const shouldGenerateAtmosphere = Boolean(currentTrack) || isPlaying || audioLoading;
 
@@ -49,7 +52,6 @@ export function MoodOutput() {
 
   const atmosphere = currentSong?.atmosphere;
   const atmosphereStatus = currentSong?.atmosphereStatus ?? 'idle';
-  const hasAtmosphereError = atmosphereStatus === 'error';
 
   // Apply atmosphere tint colors based on AI-generated tags
   const setAtmosphereColors = useAtmosphereColorStore((s) => s.setColors);
@@ -64,6 +66,14 @@ export function MoodOutput() {
     }
   }, [atmosphere?.tags, currentSong, setAtmosphereColors, resetAtmosphereColors]);
 
+  useEffect(() => {
+    if (!shouldGenerateAtmosphere || curateData || curateLoading) return;
+    if (curateRequestedRef.current === locale) return;
+
+    curateRequestedRef.current = locale;
+    curate();
+  }, [curate, curateData, curateLoading, locale, shouldGenerateAtmosphere]);
+
   // Retry helper: auto-advance on timeout/error and auto-play next on song end
   useEffect(() => {
     retryPlayRef.current = (t?: NeteaseTrack) => {
@@ -71,26 +81,13 @@ export function MoodOutput() {
       if (target) {
         setVisualTrack(toVisualTrack(target));
         playNetease(target, {
+          timeoutMs: 4500,
           onFail: () => {
-            failCountRef.current += 1;
-            if (failCountRef.current >= 3) {
-              logger.warn('[MoodOutput] Netease playback failed repeatedly, using generative fallback');
-              setVisualTrack(toVisualTrack(fallbackTrack));
-              playGenerative(fallbackTrack);
-              return;
-            }
-            const n = nextSong();
-            if (n) {
-              setTimeout(() => {
-                retryPlayRef.current(n);
-              }, 300);
-            } else {
-              setVisualTrack(toVisualTrack(fallbackTrack));
-              playGenerative(fallbackTrack);
-            }
+            logger.warn('[MoodOutput] Netease playback failed, using generative fallback');
+            setVisualTrack(toVisualTrack(fallbackTrack));
+            playGenerative(fallbackTrack);
           },
           onComplete: () => {
-            failCountRef.current = 0;
             const n = nextSong();
             if (n) {
               retryPlayRef.current(n);
@@ -102,7 +99,6 @@ export function MoodOutput() {
   }, [currentSong, fallbackTrack, playGenerative, playNetease, nextSong, toVisualTrack]);
 
   const playCurrentOrFallback = useCallback((target?: NeteaseTrack | null) => {
-    failCountRef.current = 0;
     const song = target ?? currentSong;
     if (song) {
       setVisualTrack(toVisualTrack(song));
@@ -114,7 +110,6 @@ export function MoodOutput() {
   }, [currentSong, fallbackTrack, playGenerative, toVisualTrack]);
 
   const driftToNext = useCallback(() => {
-    failCountRef.current = 0;
     const n = nextSong();
     if (n) {
       setVisualTrack(toVisualTrack(n));
@@ -197,6 +192,11 @@ export function MoodOutput() {
       data-current-track={currentTrack?.name ?? ''}
       data-current-song={currentSong?.name ?? ''}
       data-visual-track={visualTrack?.name ?? ''}
+      data-track-source={currentTrack?.source ?? ''}
+      data-atmosphere-status={atmosphereStatus}
+      data-curate-state={curateLoading ? 'loading' : curateError ? 'error' : curateData ? 'ready' : 'idle'}
+      data-pool-error={poolError ?? ''}
+      data-atmosphere-tags={showTags.join(',')}
     >
       <motion.div
         initial={{ opacity: 0, y: 12, scale: 0.96 }}
@@ -212,54 +212,9 @@ export function MoodOutput() {
               <h2 className="text-xl md:text-2xl font-medium tracking-tight text-foreground mb-1">
                 {showTitle || t('output.ready')}
               </h2>
-              <p className="text-xs md:text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto mb-2">
+              <p className="text-xs md:text-sm text-muted-foreground/70 leading-relaxed max-w-sm mx-auto mb-2">
                 {showDesc || statusLabel}
               </p>
-
-              {/* Error / offline states as subtle badges */}
-              <div className="flex items-center justify-center gap-1.5 mb-2 flex-wrap">
-                {poolError && (
-                  <Badge variant="destructive" className="px-2 py-0 text-[10px]">
-                    {t(poolError)}
-                  </Badge>
-                )}
-                {hasAtmosphereError && (
-                  <Badge variant="outline" className="px-2 py-0 text-[10px] text-muted-foreground/60 border-muted-foreground/20">
-                    {t('output.aiOffline')}
-                  </Badge>
-                )}
-              </div>
-
-              {/* Tags — staggered entrance animation */}
-              <motion.div
-                className="flex items-center justify-center gap-2 mb-2 flex-wrap"
-                variants={{
-                  hidden: {},
-                  visible: { transition: { staggerChildren: 0.06 } },
-                }}
-                initial="hidden"
-                animate="visible"
-              >
-                {showTags.length > 0 ? (
-                  showTags.map((tag) => (
-                    <motion.div
-                      key={tag}
-                      variants={{
-                        hidden: { opacity: 0, y: 4, scale: 0.92 },
-                        visible: { opacity: 1, y: 0, scale: 1 },
-                      }}
-                      transition={{ duration: 0.25, ease: 'easeOut' }}
-                    >
-                      <Badge
-                        variant="outline"
-                        className="px-2 py-0.5 text-[10px] tracking-wide border-border/50 text-muted-foreground cursor-default"
-                      >
-                        {tag}
-                      </Badge>
-                    </motion.div>
-                  ))
-                ) : null}
-              </motion.div>
             </motion.div>
 
           {/* Playback progress */}
@@ -274,9 +229,9 @@ export function MoodOutput() {
             </div>
           )}
 
-          {/* Ambient status + low-emphasis curate trigger */}
+          {/* Ambient status */}
           <motion.div
-            className="mt-3 flex items-center justify-center gap-2 text-[10px] text-muted-foreground/55"
+            className="mt-3 flex items-center justify-center gap-2 text-[10px] text-muted-foreground/45"
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
@@ -287,41 +242,7 @@ export function MoodOutput() {
               aria-hidden="true"
             />
             <span className="tracking-wide">{statusLabel}</span>
-            <button
-              type="button"
-              aria-label={t('output.curate')}
-              title={t('output.curate')}
-              onClick={(e) => {
-                e.stopPropagation();
-                curate();
-              }}
-              disabled={curateLoading}
-              className="grid h-6 w-6 place-items-center rounded-full border border-border/20 bg-background/10 text-muted-foreground/45 transition-colors hover:border-primary/30 hover:text-primary/80 disabled:opacity-40"
-            >
-              {curateLoading ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Sparkles className="w-3 h-3" />
-              )}
-            </button>
           </motion.div>
-
-          {/* Curate error — badge style */}
-          <AnimatePresence>
-            {curateError && (
-              <motion.div
-                initial={{ opacity: 0, y: 2 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 2 }}
-                transition={{ duration: 0.2 }}
-                className="flex items-center justify-center mt-1"
-              >
-                <Badge variant="destructive" className="px-2 py-0 text-[10px]">
-                  {curateError}
-                </Badge>
-              </motion.div>
-            )}
-          </AnimatePresence>
       </motion.div>
     </div>
   );

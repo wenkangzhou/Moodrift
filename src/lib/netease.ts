@@ -12,6 +12,71 @@ export interface NeteasePlaylist {
   tracks: NeteaseTrack[];
 }
 
+const CLIENT_URL_TIMEOUT_MS = 4_500;
+const CLIENT_POOL_TIMEOUT_MS = 5_000;
+const PLAYLIST_CACHE_TTL = 6 * 60 * 60 * 1000;
+const URL_CHECK_CACHE_TTL = 30 * 60 * 1000;
+
+interface CacheEnvelope<T> {
+  data: T;
+  timestamp: number;
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = CLIENT_POOL_TIMEOUT_MS
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function getClientCache<T>(key: string, ttl: number): T | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as CacheEnvelope<T>;
+    if (Date.now() - parsed.timestamp > ttl) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function setClientCache<T>(key: string, data: T) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch {
+    // Ignore storage quota / private mode errors.
+  }
+}
+
+function playlistCacheKey(id: number) {
+  return `moodrift-playlist-${id}`;
+}
+
+function urlCheckCacheKey(id: number) {
+  return `moodrift-url-valid-${id}`;
+}
+
 // Pre-curated public playlist IDs mapped to mood environments.
 // These are public NetEase Cloud Music playlists; users can swap IDs
 // or add their own in a config file later.
@@ -60,9 +125,12 @@ export const playlistCatalog: Record<number, string> = {
   5453912201: '黑胶 VIP 爱听榜，深度听众精选，品质与口碑兼具',
 };
 
-export async function getNeteaseAudioUrl(id: number): Promise<string | null> {
+export async function getNeteaseAudioUrl(
+  id: number,
+  timeoutMs = CLIENT_URL_TIMEOUT_MS
+): Promise<string | null> {
   try {
-    const res = await fetch(`/api/netease/url?id=${id}`);
+    const res = await fetchWithTimeout(`/api/netease/url?id=${id}`, {}, timeoutMs);
     if (!res.ok) return null;
     const data = await res.json();
     return data.url ?? null;
@@ -73,18 +141,33 @@ export async function getNeteaseAudioUrl(id: number): Promise<string | null> {
 
 export async function checkNeteaseUrls(ids: number[]): Promise<Set<number>> {
   if (ids.length === 0) return new Set();
+
+  const valid = new Set<number>();
+  const missing: number[] = [];
+  for (const id of ids) {
+    const cached = getClientCache<boolean>(urlCheckCacheKey(id), URL_CHECK_CACHE_TTL);
+    if (cached === true) {
+      valid.add(id);
+    } else if (cached === null) {
+      missing.push(id);
+    }
+  }
+
+  if (missing.length === 0) return valid;
+
   try {
-    const res = await fetch(`/api/netease/url?ids=${ids.join(',')}`);
-    if (!res.ok) return new Set();
+    const res = await fetchWithTimeout(`/api/netease/url?ids=${missing.join(',')}`);
+    if (!res.ok) return valid;
     const data = await res.json();
     const urls: Record<string, string | null> = data.urls ?? {};
-    const valid = new Set<number>();
-    for (const id of ids) {
-      if (urls[String(id)]) valid.add(id);
+    for (const id of missing) {
+      const hasUrl = Boolean(urls[String(id)]);
+      setClientCache(urlCheckCacheKey(id), hasUrl);
+      if (hasUrl) valid.add(id);
     }
     return valid;
   } catch {
-    return new Set();
+    return valid;
   }
 }
 
@@ -99,31 +182,41 @@ interface RawNeteaseTrack {
   dt?: number;
 }
 
+function normalizeTrack(t: RawNeteaseTrack): NeteaseTrack {
+  return {
+    id: t.id,
+    name: t.name,
+    artist: t.artists?.[0]?.name ?? t.ar?.[0]?.name ?? 'Unknown',
+    cover: t.album?.picUrl ?? t.al?.picUrl ?? '',
+    duration: Math.round((t.duration ?? t.dt ?? 0) / 1000),
+  };
+}
+
+async function fetchPlaylistTrackSet(pid: number): Promise<NeteaseTrack[]> {
+  const cached = getClientCache<NeteaseTrack[]>(playlistCacheKey(pid), PLAYLIST_CACHE_TTL);
+  if (cached) return cached;
+
+  try {
+    const res = await fetchWithTimeout(`/api/netease/playlist?id=${pid}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const tracks = ((data?.playlist?.tracks ?? []) as RawNeteaseTrack[]).map(normalizeTrack);
+    setClientCache(playlistCacheKey(pid), tracks);
+    return tracks;
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchPlaylistTracks(ids: number[]): Promise<NeteaseTrack[]> {
   const responses = await Promise.allSettled(
-    ids.map(async (pid) => {
-      try {
-        const res = await fetch(`/api/netease/playlist?id=${pid}`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data?.playlist?.tracks ?? []) as RawNeteaseTrack[];
-      } catch {
-        return [];
-      }
-    })
+    ids.map((pid) => fetchPlaylistTrackSet(pid))
   );
 
   const allTracks: NeteaseTrack[] = [];
   responses.forEach((r) => {
     if (r.status === 'fulfilled' && r.value.length > 0) {
-      const tracks = r.value.map((t) => ({
-        id: t.id,
-        name: t.name,
-        artist: t.artists?.[0]?.name ?? t.ar?.[0]?.name ?? 'Unknown',
-        cover: t.album?.picUrl ?? t.al?.picUrl ?? '',
-        duration: Math.round((t.duration ?? t.dt ?? 0) / 1000),
-      }));
-      allTracks.push(...tracks);
+      allTracks.push(...r.value);
     }
   });
 

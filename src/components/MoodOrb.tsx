@@ -21,6 +21,7 @@ const OrbBody = memo(function OrbBody({
   pulseActive,
   reducedMotion,
   ripples,
+  source,
 }: {
   isPlaying: boolean;
   isLoading: boolean;
@@ -30,13 +31,16 @@ const OrbBody = memo(function OrbBody({
   pulseActive: boolean;
   reducedMotion: boolean;
   ripples: Ripple[];
+  source: 'netease' | 'generative' | null;
 }) {
   const { primary, secondary } = useAtmosphereColorStore();
+  const isGenerative = source === 'generative';
 
-  const glowOpacity = isLoading ? '44' : isPlaying ? '31' : '19';
-  const bodyOpacity = isLoading ? 'ff' : isPlaying ? '80' : '60';
-  const shadowSpread = isLoading ? '100px' : isPlaying ? '80px' : '50px';
-  const shadowOpacity = isLoading ? '90' : isPlaying ? '60' : '40';
+  const glowOpacity = isLoading ? '44' : isGenerative && isPlaying ? '3a' : isPlaying ? '31' : '19';
+  const bodyOpacity = isLoading ? 'ff' : isGenerative && isPlaying ? '72' : isPlaying ? '80' : '60';
+  const shadowSpread = isLoading ? '100px' : isGenerative && isPlaying ? '115px' : isPlaying ? '80px' : '50px';
+  const shadowOpacity = isLoading ? '90' : isGenerative && isPlaying ? '58' : isPlaying ? '60' : '40';
+  const breathingDuration = isLoading ? 1.1 : isGenerative && isPlaying ? 3.8 : isPlaying ? 1.8 : 4.8;
 
   const absOffsetX = Math.abs(dragOffset);
   const absOffsetY = Math.abs(dragOffsetY);
@@ -74,12 +78,27 @@ const OrbBody = memo(function OrbBody({
           animation: reducedMotion
             ? 'none'
             : isLoading
-              ? 'pulse-glow 0.6s ease-in-out infinite alternate'
+              ? `pulse-glow ${breathingDuration}s ease-in-out infinite alternate`
               : isPlaying
-                ? 'pulse-glow 1.5s ease-in-out infinite alternate'
-                : 'pulse-glow 3s ease-in-out infinite alternate',
+                ? `pulse-glow ${breathingDuration}s ease-in-out infinite alternate`
+                : `pulse-glow ${breathingDuration}s ease-in-out infinite alternate`,
         }}
       />
+
+      {isGenerative && isPlaying && (
+        <motion.div
+          className="absolute inset-7 rounded-full border border-white/10 pointer-events-none blur-[1px]"
+          style={{
+            boxShadow: `0 0 70px ${secondary}44, inset 0 0 42px ${primary}18`,
+          }}
+          initial={{ opacity: 0, scale: 0.94 }}
+          animate={reducedMotion ? { opacity: 0.36, scale: 1 } : {
+            opacity: [0.18, 0.44, 0.18],
+            scale: [0.96, 1.08, 0.96],
+          }}
+          transition={{ duration: reducedMotion ? 0 : 4.2, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      )}
 
       {/* Drag trail */}
       <AnimatePresence>
@@ -114,6 +133,7 @@ const OrbBody = memo(function OrbBody({
           scaleX,
           scaleY,
           rotateZ,
+          filter: isGenerative && isPlaying ? 'saturate(0.9) brightness(1.05)' : 'saturate(1) brightness(1)',
         }}
         transition={
           reducedMotion
@@ -121,6 +141,7 @@ const OrbBody = memo(function OrbBody({
             : {
                 background: { duration: 0.7, ease: 'easeOut' },
                 boxShadow: { duration: 0.7, ease: 'easeOut' },
+                filter: { duration: 0.7, ease: 'easeOut' },
                 scaleX: (absOffsetX === 0 && absOffsetY === 0) ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
                 scaleY: (absOffsetX === 0 && absOffsetY === 0) ? { type: 'spring', stiffness: 500, damping: 22 } : { duration: 0.05 },
                 rotateZ: (absOffsetX === 0 && absOffsetY === 0) ? { type: 'spring', stiffness: 400, damping: 20 } : { duration: 0.05 },
@@ -160,7 +181,15 @@ const OrbBody = memo(function OrbBody({
 
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-7 h-7 border-2 border-white/20 border-t-white/80 rounded-full animate-spin" />
+          <motion.div
+            className="w-28 h-28 rounded-full border border-white/15"
+            style={{ boxShadow: `0 0 48px ${primary}40, inset 0 0 28px ${secondary}30` }}
+            animate={reducedMotion ? { opacity: 0.45 } : {
+              opacity: [0.18, 0.58, 0.18],
+              scale: [0.88, 1.08, 0.88],
+            }}
+            transition={{ duration: 1.45, repeat: Infinity, ease: 'easeInOut' }}
+          />
         </div>
       )}
     </div>
@@ -168,7 +197,10 @@ const OrbBody = memo(function OrbBody({
 });
 
 export function MoodOrb() {
-  const { isPlaying, isLoading, pause, currentTrack } = useAudioStore();
+  const isPlaying = useAudioStore((s) => s.isPlaying);
+  const isLoading = useAudioStore((s) => s.isLoading);
+  const pause = useAudioStore((s) => s.pause);
+  const currentTrack = useAudioStore((s) => s.currentTrack);
   const reducedMotion = useReducedMotion();
 
   const swipeRef = useRef<{ startX: number; startY: number; tracking: boolean }>({
@@ -346,6 +378,7 @@ export function MoodOrb() {
         <OrbBody
           isPlaying={isPlaying}
           isLoading={isLoading}
+          source={currentTrack?.source ?? null}
           dragOffset={dragOffset}
           dragOffsetY={dragOffsetY}
           pulseKey={pulseKey}

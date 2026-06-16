@@ -3,6 +3,8 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useAudioStore } from '@/stores/useAudioStore';
+import { useAtmosphereColorStore } from '@/stores/useAtmosphereColorStore';
 
 const environmentGradients: Record<string, string> = {
   rain: 'radial-gradient(ellipse at 50% 20%, rgba(30,58,95,0.4) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(17,24,39,0.6) 0%, transparent 50%)',
@@ -20,10 +22,17 @@ function seededRandom(seed: number) {
 export function MoodBackground() {
   const environment = 'night';
   const reducedMotion = useReducedMotion();
+  const isPlaying = useAudioStore((s) => s.isPlaying);
+  const isLoading = useAudioStore((s) => s.isLoading);
+  const currentTrack = useAudioStore((s) => s.currentTrack);
+  const primary = useAtmosphereColorStore((s) => s.primary);
+  const isGenerative = currentTrack?.source === 'generative';
 
   const overlayStyle = useMemo(() => ({
     background: environmentGradients[environment] ?? environmentGradients.night,
   }), [environment]);
+
+  const centerGlowOpacity = isLoading ? '14' : isGenerative && isPlaying ? '12' : isPlaying ? '10' : '0a';
 
   return (
     <div className="fixed inset-0 z-0 overflow-hidden">
@@ -52,18 +61,38 @@ export function MoodBackground() {
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vmin] h-[80vmin] rounded-full pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(125,211,252,0.06) 0%, transparent 70%)',
+          background: `radial-gradient(circle, ${primary}${centerGlowOpacity} 0%, transparent 70%)`,
         }}
       />
 
-      <Particles environment={environment} reducedMotion={reducedMotion} />
+      <Particles
+        environment={environment}
+        reducedMotion={reducedMotion}
+        isPlaying={isPlaying}
+        isLoading={isLoading}
+        isGenerative={isGenerative}
+      />
     </div>
   );
 }
 
-function Particles({ environment, reducedMotion }: { environment: string; reducedMotion: boolean }) {
-  const particleCount = environment === 'rain' ? 40 : environment === 'run' ? 60 : 25;
-  const speed = environment === 'run' ? 2.5 : environment === 'rain' ? 1.8 : 1;
+function Particles({
+  environment,
+  reducedMotion,
+  isPlaying,
+  isLoading,
+  isGenerative,
+}: {
+  environment: string;
+  reducedMotion: boolean;
+  isPlaying: boolean;
+  isLoading: boolean;
+  isGenerative: boolean;
+}) {
+  const baseParticleCount = environment === 'rain' ? 40 : 25;
+  const particleCount = isLoading ? baseParticleCount + 8 : isPlaying ? baseParticleCount + 6 : baseParticleCount;
+  const baseSpeed = environment === 'rain' ? 1.8 : 1;
+  const speed = isLoading ? baseSpeed * 1.25 : isGenerative && isPlaying ? baseSpeed * 0.72 : isPlaying ? baseSpeed * 1.35 : baseSpeed;
 
   const particles = useMemo(() => {
     return Array.from({ length: particleCount }).map((_, i) => {
@@ -73,10 +102,10 @@ function Particles({ environment, reducedMotion }: { environment: string; reduce
         delay: reducedMotion ? 0 : seededRandom(seed + 1) * 8,
         duration: reducedMotion ? 0 : (4 + seededRandom(seed + 2) * 6) / speed,
         size: environment === 'rain' ? 1.5 : 2 + seededRandom(seed + 3) * 2,
-        opacity: 0.1 + seededRandom(seed + 4) * 0.3,
+        opacity: (isGenerative && isPlaying ? 0.08 : 0.1) + seededRandom(seed + 4) * (isPlaying ? 0.36 : 0.28),
       };
     });
-  }, [environment, particleCount, speed, reducedMotion]);
+  }, [environment, particleCount, speed, reducedMotion, isPlaying, isGenerative]);
 
   return (
     <div className="absolute inset-0 pointer-events-none">

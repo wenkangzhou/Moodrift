@@ -1,6 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { fetchPlaylistTracks, checkNeteaseUrls, type NeteaseTrack } from '@/lib/netease';
-import { type AtmosphereData, getCached, setCached } from '@/hooks/useAtmosphere';
+import {
+  type AtmosphereData,
+  getCachedAtmosphere,
+  setCachedAtmosphere,
+} from '@/lib/atmosphere-cache';
 import { logger } from '@/lib/logger';
 
 interface SongWithAtmosphere extends NeteaseTrack {
@@ -21,7 +25,7 @@ async function fetchAtmosphereForSong(
   song: NeteaseTrack,
   locale: string
 ): Promise<{ data?: AtmosphereData; error?: string }> {
-  const cached = getCached(song.name, song.artist, locale);
+  const cached = getCachedAtmosphere(song.name, song.artist, locale);
   if (cached) {
     return { data: cached };
   }
@@ -43,7 +47,7 @@ async function fetchAtmosphereForSong(
     }
 
     const result: AtmosphereData = await res.json();
-    setCached(song.name, song.artist, locale, result);
+    setCachedAtmosphere(song.name, song.artist, locale, result);
     return { data: result };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
@@ -112,6 +116,7 @@ export function useSongPool(locale: string, playlistIds?: number[], enableAtmosp
   const prefetchedIdsRef = useRef<Set<number>>(new Set());
   const retriedIdsRef = useRef<Set<number>>(new Set());
   const hasSongsRef = useRef(false);
+  const loadRequestIdRef = useRef(0);
 
   const playlistIdsKey = playlistIds?.join(',') ?? '';
 
@@ -140,7 +145,7 @@ export function useSongPool(locale: string, playlistIds?: number[], enableAtmosp
       // 1. Apply cached results immediately, collect uncached
       const uncached: NeteaseTrack[] = [];
       for (const t of toProcess) {
-        const cached = getCached(t.name, t.artist, locale);
+        const cached = getCachedAtmosphere(t.name, t.artist, locale);
         if (cached) {
           updateSongAtmosphere(t.id, cached, 'done');
         } else {
@@ -159,7 +164,7 @@ export function useSongPool(locale: string, playlistIds?: number[], enableAtmosp
         uncached.forEach((t, i) => {
           const data = results[i];
           if (data) {
-            setCached(t.name, t.artist, locale, data);
+            setCachedAtmosphere(t.name, t.artist, locale, data);
             updateSongAtmosphere(t.id, data, 'done');
           } else {
             updateSongAtmosphere(t.id, undefined, 'error');
@@ -173,6 +178,10 @@ export function useSongPool(locale: string, playlistIds?: number[], enableAtmosp
   );
 
   const loadPool = useCallback(async (): Promise<SongWithAtmosphere[]> => {
+    const requestId = loadRequestIdRef.current + 1;
+    loadRequestIdRef.current = requestId;
+    const isCurrentRequest = () => loadRequestIdRef.current === requestId;
+
     const isFirstLoad = !hasSongsRef.current;
     setPoolLoading(true);
     setPoolError(null);
@@ -182,6 +191,7 @@ export function useSongPool(locale: string, playlistIds?: number[], enableAtmosp
     // Step 1: Fetch initial tracks from 2 playlists (fast)
     const initialIds = shuffle(targetPool).slice(0, INITIAL_PLAYLIST_BATCH);
     const initialTracks = await fetchPlaylistTracks(initialIds);
+    if (!isCurrentRequest()) return [];
 
     if (initialTracks.length === 0) {
       setPoolError('output.loadTracksError');
@@ -198,6 +208,7 @@ export function useSongPool(locale: string, playlistIds?: number[], enableAtmosp
 
     // Step 2.5: Batch-check URL availability — filter out tracks that Netease has no URL for
     const validIds = await checkNeteaseUrls(poolTracks.map((t) => t.id));
+    if (!isCurrentRequest()) return [];
     const validTracks = poolTracks.filter((t) => validIds.has(t.id));
 
     // If too few valid tracks, try one more playlist batch before giving up
@@ -207,8 +218,10 @@ export function useSongPool(locale: string, playlistIds?: number[], enableAtmosp
         .slice(0, INITIAL_PLAYLIST_BATCH);
       if (extraIds.length > 0) {
         const extraTracks = await fetchPlaylistTracks(extraIds);
+        if (!isCurrentRequest()) return [];
         const extraPool = shuffle(extraTracks).slice(0, POOL_SIZE - validTracks.length);
         const extraValidIds = await checkNeteaseUrls(extraPool.map((t) => t.id));
+        if (!isCurrentRequest()) return [];
         validTracks.push(...extraPool.filter((t) => extraValidIds.has(t.id)));
       }
     }
@@ -239,10 +252,12 @@ export function useSongPool(locale: string, playlistIds?: number[], enableAtmosp
       .slice(0, EXPAND_PLAYLIST_BATCH);
     if (remainingIds.length > 0) {
       fetchPlaylistTracks(remainingIds).then(async (extraTracks) => {
+        if (!isCurrentRequest()) return;
         if (extraTracks.length === 0) return;
         const shuffledExtra = shuffle(extraTracks);
         const candidates = shuffledExtra.slice(0, POOL_SIZE);
         const validExtraIds = await checkNeteaseUrls(candidates.map((t) => t.id));
+        if (!isCurrentRequest()) return;
         const validExtra = candidates.filter((t) => validExtraIds.has(t.id));
 
         setSongs((prev) => {

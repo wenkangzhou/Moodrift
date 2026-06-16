@@ -200,7 +200,8 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         return latest?.source === 'netease' && latest.neteaseId === track.id;
       };
 
-      const url = await getNeteaseAudioUrl(track.id);
+      const timeoutMs = options.timeoutMs ?? 8000;
+      const url = await getNeteaseAudioUrl(track.id, timeoutMs);
       if (!isCurrentTrack()) return;
 
       if (!url) {
@@ -226,7 +227,6 @@ export const useAudioStore = create<AudioStore>((set, get) => {
 
       let hasStarted = false;
       let playAttempted = false;
-      const timeoutMs = options.timeoutMs ?? 8000;
       const timeout = setTimeout(() => {
         if (!isCurrentEl()) return;
         logger.warn('[AudioStore] Netease load timeout, id:', track.id);

@@ -7,9 +7,12 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 export function BackgroundFlow() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { isPlaying } = useAudioStore();
-  const { palette } = useAtmosphereColorStore();
+  const isPlaying = useAudioStore((s) => s.isPlaying);
+  const isLoading = useAudioStore((s) => s.isLoading);
+  const currentTrack = useAudioStore((s) => s.currentTrack);
+  const palette = useAtmosphereColorStore((s) => s.palette);
   const reducedMotion = useReducedMotion();
+  const isGenerative = currentTrack?.source === 'generative';
 
   useEffect(() => {
     if (reducedMotion) return;
@@ -65,7 +68,7 @@ export function BackgroundFlow() {
       time += 0.01;
       ctx.clearRect(0, 0, w, h);
 
-      const speedMult = isPlaying ? 2.5 : 1;
+      const speedMult = isLoading ? 1.8 : isGenerative && isPlaying ? 0.85 : isPlaying ? 1.65 : 0.85;
       const currentPalette = getPalette();
 
       // Draw flowing lines between nearby particles
@@ -87,9 +90,9 @@ export function BackgroundFlow() {
 
         // Draw particle
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius * (isPlaying ? 1.5 : 1), 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.radius * (isPlaying ? (isGenerative ? 1.12 : 1.35) : 1), 0, Math.PI * 2);
         ctx.fillStyle = p.color.replace(/[0-9a-fA-F]{2}$/, () =>
-          Math.floor(p.alpha * (isPlaying ? 180 : 120)).toString(16).padStart(2, '0')
+          Math.floor(p.alpha * (isPlaying ? (isGenerative ? 135 : 165) : 110)).toString(16).padStart(2, '0')
         );
         ctx.fill();
 
@@ -107,12 +110,12 @@ export function BackgroundFlow() {
               /[0-9a-fA-F]{2}$/,
               () =>
                 Math.floor(
-                  (0.12 * (1 - dist / 150) * (isPlaying ? 2 : 1)) * 255
+                  (0.1 * (1 - dist / 150) * (isPlaying ? (isGenerative ? 1.25 : 1.75) : 1)) * 255
                 )
                   .toString(16)
                   .padStart(2, '0')
             );
-            ctx.lineWidth = isPlaying ? 0.8 : 0.5;
+            ctx.lineWidth = isPlaying ? (isGenerative ? 0.55 : 0.72) : 0.45;
             ctx.stroke();
           }
         }
@@ -121,9 +124,11 @@ export function BackgroundFlow() {
       // Wave overlay at bottom when playing
       if (isPlaying) {
         ctx.beginPath();
+        const waveA = isGenerative ? 16 : 26;
+        const waveB = isGenerative ? 10 : 18;
         for (let x = 0; x < w; x += 3) {
           const y =
-            h - 100 + Math.sin(x * 0.008 + time * 3) * 30 + Math.sin(x * 0.004 + time * 2) * 20;
+            h - 100 + Math.sin(x * 0.008 + time * 3) * waveA + Math.sin(x * 0.004 + time * 2) * waveB;
           if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
@@ -146,7 +151,7 @@ export function BackgroundFlow() {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
     };
-  }, [isPlaying, palette, reducedMotion]);
+  }, [isGenerative, isLoading, isPlaying, palette, reducedMotion]);
 
   return (
     <canvas
