@@ -6,6 +6,7 @@ const MOONSHOT_API_KEY = process.env.MOONSHOT_API_KEY;
 const MOONSHOT_API_URL = 'https://api.moonshot.cn/v1/chat/completions';
 const CURATE_CACHE_TTL = 24 * 60 * 60 * 1000;
 const KIMI_TIMEOUT_MS = 12_000;
+const MAX_BODY_SIZE = 256 * 1024; // 256 KB
 
 interface CurateResponse {
   playlistIds: number[];
@@ -21,6 +22,35 @@ function buildCatalogText(): string {
     .join('\n');
 }
 
+function sanitizeString(value: unknown, maxLen: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed.slice(0, maxLen);
+}
+
+function validateCurateBody(body: unknown) {
+  if (!body || typeof body !== 'object') {
+    return { error: 'Invalid JSON body' } as const;
+  }
+
+  const raw = body as Record<string, unknown>;
+  const locale = raw.locale === 'en' ? 'en' : 'zh';
+  const environment = sanitizeString(raw.environment, 40);
+  const activity = sanitizeString(raw.activity, 40);
+  const emotion = sanitizeString(raw.emotion, 40);
+
+  let energy = 50;
+  if (raw.energy !== undefined) {
+    if (typeof raw.energy !== 'number' || !Number.isFinite(raw.energy)) {
+      return { error: 'energy must be a number' } as const;
+    }
+    energy = Math.max(0, Math.min(100, Math.round(raw.energy)));
+  }
+
+  return { locale, environment, activity, emotion, energy };
+}
+
 export async function POST(request: NextRequest) {
   if (!MOONSHOT_API_KEY) {
     return NextResponse.json(
@@ -29,19 +59,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body !== 'object') {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+    return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const raw = body as Record<string, unknown>;
-  const locale = raw.locale === 'en' ? 'en' : 'zh';
-  const environment = typeof raw.environment === 'string' ? raw.environment.slice(0, 40) : undefined;
-  const activity = typeof raw.activity === 'string' ? raw.activity.slice(0, 40) : undefined;
-  const emotion = typeof raw.emotion === 'string' ? raw.emotion.slice(0, 40) : undefined;
-  const energy = typeof raw.energy === 'number'
-    ? Math.max(0, Math.min(100, Math.round(raw.energy)))
-    : 50;
+  const validation = validateCurateBody(body);
+  if ('error' in validation) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
+  const { locale, environment, activity, emotion, energy } = validation;
   const cacheKey = stableKey(['curate', locale, environment, activity, emotion, energy]);
   const cached = getServerCache(curateCache, cacheKey);
   if (cached) {
@@ -63,7 +98,7 @@ ${catalog}
 - 环境：${environment ?? '未指定'}
 - 活动：${activity ?? '未指定'}
 - 情绪：${emotion ?? '未指定'}
-- 能量值：${energy ?? 50}/100
+- 能量值：${energy}/100
 
 请从目录中挑选 1-3 个最适合当前心情的歌单，返回它们的 ID。
 同时为这个心情组合起一个诗意的标题（2-4 个中文词）和一句简短的氛围描述（20-40 字）。
@@ -78,7 +113,7 @@ The user's current mood state:
 - Environment: ${environment ?? 'unspecified'}
 - Activity: ${activity ?? 'unspecified'}
 - Emotion: ${emotion ?? 'unspecified'}
-- Energy: ${energy ?? 50}/100
+- Energy: ${energy}/100
 
 Please pick 1-3 playlists that best match this mood and return their IDs.
 Also give this mood combination a poetic title (2-4 words) and a short atmosphere description (30-60 chars).
@@ -115,10 +150,11 @@ Return ONLY the following JSON format, no other text:
     }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
-      const error = await response.text();
+      const errorText = await response.text();
+      console.warn('[curate] Kimi API error:', response.status, errorText.slice(0, 500));
       return NextResponse.json(
-        { error: `Kimi API error: ${error}` },
-        { status: response.status }
+        { error: 'AI service unavailable' },
+        { status: 502 }
       );
     }
 
@@ -174,8 +210,9 @@ Return ONLY the following JSON format, no other text:
       headers: { 'x-moodrift-cache': 'miss' },
     });
   } catch (err) {
+    console.error('[curate] Error:', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Unknown error' },
+      { error: 'Failed to curate playlists' },
       { status: 500 }
     );
   }

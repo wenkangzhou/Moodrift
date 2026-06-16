@@ -7,6 +7,7 @@ const MAX_BATCH_TRACKS = 3;
 const MAX_FIELD_LENGTH = 120;
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const KIMI_TIMEOUT_MS = 12_000;
+const MAX_BODY_SIZE = 256 * 1024; // 256 KB
 
 const atmosphereCache: ServerCache<AtmosphereData> = new Map();
 
@@ -85,8 +86,9 @@ async function callKimi(prompt: string, maxTokens: number): Promise<string> {
   }).finally(() => clearTimeout(timeoutId));
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Kimi API error: ${error}`);
+    const errorText = await response.text();
+    console.warn('[generate-atmosphere] Kimi API error:', response.status, errorText.slice(0, 500));
+    throw new Error('AI service unavailable');
   }
 
   const data = await response.json();
@@ -246,7 +248,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json().catch(() => null);
+  const contentLength = request.headers.get('content-length');
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+    return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
   if (!body || typeof body !== 'object') {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
@@ -325,7 +338,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error('[generate-atmosphere] Error:', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Unknown error' },
+      { error: 'Failed to generate atmosphere' },
       { status: 500 }
     );
   }

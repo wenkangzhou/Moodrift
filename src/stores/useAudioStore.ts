@@ -92,16 +92,25 @@ interface AudioStore {
   playNetease: (track: NeteaseTrack, options?: PlayNeteaseOptions) => Promise<void>;
   playGenerative: (track: GenerativeTrack) => void;
   pause: () => void;
+  cleanup: () => void;
 }
 
 export const useAudioStore = create<AudioStore>((set, get) => {
   let audioEl: HTMLAudioElement | null = null;
   let progressTimer: ReturnType<typeof setInterval> | null = null;
+  let fadeTimeout: ReturnType<typeof setTimeout> | null = null;
 
   const clearProgress = () => {
     if (progressTimer) {
       clearInterval(progressTimer);
       progressTimer = null;
+    }
+  };
+
+  const clearFade = () => {
+    if (fadeTimeout) {
+      clearTimeout(fadeTimeout);
+      fadeTimeout = null;
     }
   };
 
@@ -113,6 +122,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
 
   const stopCurrent = () => {
     clearProgress();
+    clearFade();
     if (audioEl) {
       hardStopEl(audioEl);
       audioEl = null;
@@ -128,6 +138,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     hardStopEl(el);
     if (audioEl === el) audioEl = null;
     clearProgress();
+    clearFade();
     set({
       isLoading: false,
       isPlaying: false,
@@ -143,10 +154,15 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     }
   };
 
-  const startNeteaseProgress = (durationMs: number) => {
+  const startNeteaseProgress = (durationMs: number, expectedTrack: UnifiedTrack) => {
     clearProgress();
     const durationSec = durationMs / 1000;
     progressTimer = setInterval(() => {
+      const latest = get().currentTrack;
+      if (latest?.source !== 'netease' || latest.neteaseId !== expectedTrack.neteaseId) {
+        clearProgress();
+        return;
+      }
       const current = audioEl?.currentTime ?? 0;
       const p = durationMs > 0 ? Math.min(100, (current * 1000 / durationMs) * 100) : 0;
       set({ progress: p });
@@ -172,7 +188,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         try {
           await audioEl.play();
           set({ isPlaying: true });
-          startNeteaseProgress(track.duration * 1000);
+          startNeteaseProgress(track.duration * 1000, current);
           return;
         } catch {
           // Fall through to full reload
@@ -253,7 +269,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         clear();
         set({ isLoading: false, isPlaying: true });
         setMediaSessionPlaybackState('playing');
-        startNeteaseProgress(track.duration * 1000);
+        startNeteaseProgress(track.duration * 1000, unified);
 
         // Fade in volume over 600ms
         const fadeSteps = 24;
@@ -264,7 +280,9 @@ export const useAudioStore = create<AudioStore>((set, get) => {
           if (!isCurrentEl()) return;
           f++;
           myEl.volume = Math.min(1, myEl.volume + increment);
-          if (f < fadeSteps) setTimeout(fadeIn, fadeStepMs);
+          if (f < fadeSteps) {
+            fadeTimeout = setTimeout(fadeIn, fadeStepMs);
+          }
         };
         fadeIn();
       };
@@ -275,6 +293,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         hardStopEl(myEl);
         if (audioEl === myEl) audioEl = null;
         clearProgress();
+        clearFade();
         set({ isPlaying: false, progress: 0 });
         options.onComplete?.();
       };
@@ -298,13 +317,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
 
     playGenerative: (track) => {
       // Hard stop netease audio before generative starts
-      clearProgress();
-      if (audioEl) {
-        const oldEl = audioEl;
-        audioEl = null;
-        hardStopEl(oldEl);
-      }
-      getGenerativePlayer().stop(true);
+      stopCurrent();
 
       const unified: UnifiedTrack = {
         name: track.name,
@@ -330,12 +343,16 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         const durationMs = track.duration * 1000;
         const startTime = Date.now();
         progressTimer = setInterval(() => {
+          const latest = get().currentTrack;
+          if (latest?.source !== 'generative' || latest.generativeData !== track) {
+            clearProgress();
+            return;
+          }
           const elapsed = Date.now() - startTime;
           const p = Math.min(100, (elapsed / durationMs) * 100);
           set({ progress: p });
           if (p >= 100) {
-            clearInterval(progressTimer!);
-            progressTimer = null;
+            clearProgress();
           }
         }, 300);
       } catch (err) {
@@ -353,6 +370,12 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       clearProgress();
       set({ isPlaying: false });
       setMediaSessionPlaybackState('paused');
+    },
+
+    cleanup: () => {
+      stopCurrent();
+      set({ currentTrack: null, isPlaying: false, progress: 0, isLoading: false });
+      setMediaSessionPlaybackState('none');
     },
   };
 });

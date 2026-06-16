@@ -153,6 +153,8 @@ export function BackgroundFlow() {
     };
   }, [isGenerative, isLoading, isPlaying, palette, reducedMotion]);
 
+  if (reducedMotion) return null;
+
   return (
     <canvas
       ref={canvasRef}
