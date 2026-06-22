@@ -5,6 +5,8 @@ import { useAudioStore } from '@/stores/useAudioStore';
 import { useAtmosphereColorStore } from '@/stores/useAtmosphereColorStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
+const DEFAULT_PALETTE = ['#7DD3FC20', '#A78BFA20', '#818CF815'];
+
 export function BackgroundFlow() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isPlaying = useAudioStore((s) => s.isPlaying);
@@ -13,6 +15,21 @@ export function BackgroundFlow() {
   const palette = useAtmosphereColorStore((s) => s.palette);
   const reducedMotion = useReducedMotion();
   const isGenerative = currentTrack?.source === 'generative';
+  const stateRef = useRef({
+    isPlaying,
+    isLoading,
+    isGenerative,
+    palette: palette.length >= 3 ? palette : DEFAULT_PALETTE,
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      isPlaying,
+      isLoading,
+      isGenerative,
+      palette: palette.length >= 3 ? palette : DEFAULT_PALETTE,
+    };
+  }, [isGenerative, isLoading, isPlaying, palette]);
 
   useEffect(() => {
     if (reducedMotion) return;
@@ -27,14 +44,20 @@ export function BackgroundFlow() {
     let raf = 0;
 
     const resize = () => {
-      w = canvas.width = window.innerWidth;
-      h = canvas.height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
     window.addEventListener('resize', resize);
 
     const getPalette = () => {
-      return palette.length >= 3 ? palette : ['#7DD3FC20', '#A78BFA20', '#818CF815'];
+      return stateRef.current.palette;
     };
 
     const particleCount = 65;
@@ -65,6 +88,7 @@ export function BackgroundFlow() {
 
     let time = 0;
     const draw = () => {
+      const { isLoading, isGenerative, isPlaying } = stateRef.current;
       time += 0.01;
       ctx.clearRect(0, 0, w, h);
 
@@ -151,7 +175,7 @@ export function BackgroundFlow() {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
     };
-  }, [isGenerative, isLoading, isPlaying, palette, reducedMotion]);
+  }, [reducedMotion]);
 
   if (reducedMotion) return null;
 

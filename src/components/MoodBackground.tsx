@@ -89,23 +89,23 @@ function Particles({
   isLoading: boolean;
   isGenerative: boolean;
 }) {
-  const baseParticleCount = environment === 'rain' ? 40 : 25;
-  const particleCount = isLoading ? baseParticleCount + 8 : isPlaying ? baseParticleCount + 6 : baseParticleCount;
+  const particleCount = environment === 'rain' ? 40 : 33;
   const baseSpeed = environment === 'rain' ? 1.8 : 1;
   const speed = isLoading ? baseSpeed * 1.25 : isGenerative && isPlaying ? baseSpeed * 0.72 : isPlaying ? baseSpeed * 1.35 : baseSpeed;
+  const opacityMultiplier = isLoading ? 1.35 : isGenerative && isPlaying ? 0.85 : isPlaying ? 1.2 : 1;
 
   const particles = useMemo(() => {
     return Array.from({ length: particleCount }).map((_, i) => {
       const seed = environment.charCodeAt(0) + i * 7919;
       return {
         left: seededRandom(seed) * 100,
-        delay: reducedMotion ? 0 : seededRandom(seed + 1) * 8,
-        duration: reducedMotion ? 0 : (4 + seededRandom(seed + 2) * 6) / speed,
+        delay: seededRandom(seed + 1) * 8,
+        duration: 4 + seededRandom(seed + 2) * 6,
         size: environment === 'rain' ? 1.5 : 2 + seededRandom(seed + 3) * 2,
-        opacity: (isGenerative && isPlaying ? 0.08 : 0.1) + seededRandom(seed + 4) * (isPlaying ? 0.36 : 0.28),
+        opacity: 0.1 + seededRandom(seed + 4) * 0.28,
       };
     });
-  }, [environment, particleCount, speed, reducedMotion, isPlaying, isGenerative]);
+  }, [environment, particleCount]);
 
   return (
     <div className="absolute inset-0 pointer-events-none">
@@ -124,11 +124,11 @@ function Particles({
           initial={reducedMotion ? { top: `${seededRandom(i * 7919) * 100}%`, opacity: p.opacity } : { top: '-5%', opacity: 0 }}
           animate={reducedMotion ? undefined : {
             top: '105%',
-            opacity: [0, p.opacity, p.opacity, 0],
+            opacity: [0, Math.min(0.54, p.opacity * opacityMultiplier), Math.min(0.54, p.opacity * opacityMultiplier), 0],
           }}
           transition={{
-            duration: p.duration,
-            delay: p.delay,
+            duration: p.duration / speed,
+            delay: reducedMotion ? 0 : p.delay,
             repeat: reducedMotion ? 0 : Infinity,
             ease: 'linear',
           }}
